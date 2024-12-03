@@ -48,7 +48,3 @@ Este é um portal dinâmico de séries de TV, desenvolvido como parte de um trab
 - **API Externa:**  
   - [The Movie DB API](https://developers.themoviedb.org/3)
 
----
-
-## **📂 Estrutura do Projeto**
-portalSeries/ ├── public/ │ ├── css/ │ │ └── styles.css │ ├── js/ │ │ ├── home.js │ │ ├── explorer.js │ │ └── details.js │ ├── img/ │ ├── index.html │ ├── explorer.html │ └── detalhes.html ├── server/ │ ├── db.json │ └── server.js ├── utils/ │ ├── api.js │ └── helpers.js └── README.md
