@@ -1,0 +1,123 @@
+/* Variáveis globais */
+:root {
+  --primary-color: #facc15;
+  --secondary-color: #020617;
+  --text-color: #fff;
+  --font-family: "Arial", sans-serif;
+}
+
+/* Reset básico */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-family);
+  color: var(--text-color);
+  line-height: 1.6;
+  background-color: #0f172a;
+}
+
+/* Estilo do container */
+.container {
+  width: 90%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+/* Header */
+header {
+  background-color: var(--secondary-color);
+  border-bottom: 1px solid #ccc;
+  padding: 10px 0;
+}
+
+header .logo {
+  height: 40px;
+  display: flex;
+  margin-bottom: 8px;
+}
+
+header .explorar {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 30px;
+  margin-left: auto;
+  transition: 1s;
+}
+
+header .explorar:hover {
+  scale: 1.2;
+  cursor: pointer;
+}
+
+header .navigation {
+  display: flex;
+  gap: 15px;
+}
+
+header .navigation a {
+  color: var(--primary-color);
+  text-decoration: none;
+  font-weight: bold;
+}
+
+header .nav-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Seções */
+section {
+  margin-bottom: 40px;
+}
+
+section h2 {
+  font-size: 24px;
+  margin-bottom: 20px;
+  color: var(--primary-color);
+}
+
+/* Grid de séries */
+.series-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 15px;
+}
+
+.series-item {
+  background-color: var(--secondary-color);
+  padding: 10px;
+  border-radius: 5px;
+  text-align: center;
+}
+
+.series-item img {
+  width: 100%;
+  height: auto;
+  border-radius: 5px;
+}
+
+/* Carousel */
+.carousel {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--secondary-color);
+  padding: 10px;
+  border-radius: 5px;
+}
+
+.carousel .nav {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--primary-color);
+  font-size: 24px;
+}

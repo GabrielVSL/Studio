@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tela 1 - Home-Page</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet" />
+    <link href="style.css" rel="stylesheet" />
+</head>
+<body>
+    <header>
+        <div class="container">
+          <div class="nav-logo">  
+            <img src="/images/homePage/logo.png" alt="Logotipo da página" class="logo"/> <h1>PucFlix</h1>
+
+            <img src="/images/homePage/lupa.png" class="explorar">
+          </div>
+          
+            <nav aria-label="Navegação principal" class="navigation">
+                <a href="#popular-series">Séries Populares</a>
+                <a href="#new-series">Novas Séries</a>
+                <a href="#student-info">Informações</a>
+                <a href="#my-series">Minhas Séries</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container">
+        <section id="popular-series" class="popular-series">
+            <h2>Séries Populares</h2>
+            <div class="carousel">
+                <button class="nav left" aria-label="Voltar série">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+                
+                <img src="" alt="Imagem de série popular" class="carousel-image"/>
+
+                <button class="nav right" aria-label="Avançar série">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+            </div>
+        </section>
+
+        <section id="new-series" class="new-series">
+            <h2>Novas Séries</h2>
+            <div class="series-grid">
+                <!-- Elementos gerados dinamicamente -->
+                <div class="series-item">
+                    <img src="" alt="Capa da nova série" />
+                    <p class="description">Descrição breve da série</p>
+                </div>
+                <!-- Copiar estrutura para mais séries -->
+            </div>
+        </section>
+
+        <section id="student-info" class="student-info">
+            <h2>Informações do Aluno</h2>
+            <p>Este layout é personalizado e contém:</p>
+            <ul>
+                <li>Imagem</li>
+                <li>Nome</li>
+                <li>Mini bio</li>
+                <li>Redes sociais</li>
+                <li>Curso e turma</li>
+            </ul>
+        </section>
+
+        <section id="my-series" class="my-series">
+            <h2>Minhas Séries</h2>
+            <div class="series-grid">
+                <div class="series-item">
+                    <img src="" alt="Capa de série assistida" />
+                    <p class="description">Descrição breve da minha série</p>
+                </div>
+                <!-- Copiar estrutura para mais séries -->
+            </div>
+        </section>
+    </main>
+</body>
+</html>
