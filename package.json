@@ -1,0 +1,25 @@
+{
+  "name": "portal-de-series",
+  "version": "1.0.0",
+  "description": "Um portal de series criado com o objetivo de entender melhor node e a api \"The Movie DB API",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GabrielVSL/Portal-de-Series.git"
+  },
+  "author": "Gabriel Victor Souza Lopes",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/GabrielVSL/Portal-de-Series/issues"
+  },
+  "keywords": [],
+  "dependencies": {
+    "axios": "^1.7.8",
+    "cors": "^2.8.5",
+    "express": "^4.21.1"
+  }
+}
