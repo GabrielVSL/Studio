@@ -19,7 +19,6 @@
                         <a href="#">Favoritos</a>
                     </div>
                 </div>
-                
             </div>
         </header>
 
@@ -27,42 +26,23 @@
         <section class="movie-details">
             <div class="info">
                 <div class="esquerda">
-                    <img alt="Poster do Filme" src="/public/images/detalheSerie/dark.jpg" width="300" height="450" />
+                    <img id="movie-poster" alt="Poster do Filme" width="300" height="450" />
                 </div>
 
                 <div class="direita">
-                    <h2>Título do Filme</h2>
+                    <h2 id="movie-title">Título do Filme</h2>
 
                     <div class="movie-info">
-                        <p><b>Ano de Lançamento:</b> 2023</p>
-                        <p><b>Gênero:</b> Ação, Aventura</p>
-                        <p><b>Duração:</b> 120 minutos</p>
-                        <p><b>Sinopse:</b> Esta é uma breve descrição do enredo do filme. Ela fornece uma visão geral da história e dos personagens principais.</p>
+                        <p><b>Ano de Lançamento:</b> <span id="release-year">2023</span></p>
+                        <p><b>Gênero:</b> <span id="movie-genres">Ação, Aventura</span></p>
+                        <p><b>Duração:</b> <span id="movie-runtime">120 minutos</span></p>
+                        <p><b>Sinopse:</b> <span id="movie-overview">Esta é uma breve descrição do enredo do filme. Ela fornece uma visão geral da história e dos personagens principais.</span></p>
                     </div>
 
                     <section class="cast">
                         <h3>Elenco Principal:</h3>
-                        <ul>
-                            <div class="ator">
-                                <li><img src="/public/images/detalheSerie/ronaldinho.webp"/>Ator 1</li>
-                            </div>
-                            
-                            <div class="ator">
-                                <li><img src="/public/images/detalheSerie/ronaldinho.webp"/>Ator 2</li>
-                            </div>
-
-                            <div class="ator">
-                                <li><img src="/public/images/detalheSerie/ronaldinho.webp"/>Ator 3</li>
-                            </div>
-
-                            <div class="ator">
-                                <li><img src="/public/images/detalheSerie/ronaldinho.webp"/>Ator 4</li>
-                            </div>
-
-                            <div class="ator">
-                                <li><img src="/public/images/detalheSerie/ronaldinho.webp"/>Ator 5</li>
-                            </div>
-
+                        <ul id="cast-list">
+                            <!-- Elenco será inserido dinamicamente -->
                         </ul>
                     </section>
                 </div>
@@ -70,7 +50,7 @@
 
             <div class="rating">
                 <i class="fas fa-star"></i>
-                <span>8.5/10</span>
+                <span id="movie-rating">8.5/10</span>
             </div>
 
             <button class="action-button">Adicionar aos Favoritos</button>
@@ -85,5 +65,8 @@
 
         </section>
         </main>
+
+        <!-- Inclusão do script -->
+        <script src="/public/js/detalhes.js"></script>
     </body>
 </html>

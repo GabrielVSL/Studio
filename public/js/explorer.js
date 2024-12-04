@@ -19,7 +19,7 @@ async function fetchMovies() {
 }
 
 function createMovieCard(media) {
-  const { title, name, poster_path, vote_average, overview } = media; // Desestruturando para pegar título, nome, avaliação e sinopse
+  const { id, title, name, poster_path, vote_average, overview } = media; // Desestruturando para pegar id, título, nome, avaliação e sinopse
 
   // Cria o elemento do card
   const card = document.createElement("div");
@@ -32,20 +32,23 @@ function createMovieCard(media) {
     title || name
   }" />
     </div>
-    <div class="movie-details">
-        <div class="movie-title">${title || name}</div>
-        <div class="movie-rating">
-            <i class="fas fa-star"> </i>
-            <img src="/public/images/detalheSerie/estrela.png" class="estrela">
-            <span>${vote_average || "N/A"}</span>
-            <i class="fas fa-heart"> </i>
-            <img src="/public/images/detalheSerie/coracao.png" class="coracao">
-            <span>Favoritar</span>
-        </div>
-        <div class="movie-description">
-            ${overview || "Descrição não disponível."}
-        </div>
-    </div>
+    <!-- Aqui passamos o ID na URL do link -->
+    <a href="detalhes.html?id=${id}">
+      <div class="movie-details">
+          <div class="movie-title">${title || name}</div>
+          <div class="movie-rating">
+              <i class="fas fa-star"> </i>
+              <img src="/public/images/detalheSerie/estrela.png" class="estrela">
+              <span>${vote_average || "N/A"}</span>
+              <i class="fas fa-heart"> </i>
+              <img src="/public/images/detalheSerie/coracao.png" class="coracao">
+              <span>Favoritar</span>
+          </div>
+          <div class="movie-description">
+              ${overview || "Descrição não disponível."}
+          </div>
+      </div>
+    </a>
   `;
 
   return card; // Retorna o card gerado
