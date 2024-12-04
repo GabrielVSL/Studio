@@ -27,6 +27,14 @@ body {
   padding: 20px;
 }
 
+.container a {
+  display: flex;
+  text-decoration: none;
+  color: var(--text-color);
+  justify-content: center;
+  gap: 10px;
+}
+
 .info {
     width: 100%;
     display: flex;
