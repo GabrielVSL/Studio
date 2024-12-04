@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Explorar</title>
+    <link rel="stylesheet" href="/public/css/explorer.css">
+    <link rel="stylesheet" href="/public/css/card.css">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <div class="nav-logo">  
+                <img src="/public/images/homePage/logo.png" class="logo"/> <h1>PucFlix</h1>
+
+                <div class="pesquisar">
+                    <input type="text" id="search-input" placeholder="Pesquisar">
+                    <button class="search-button" id="search-button">
+                        <img src="/public/images/explorador/pesquisar.png" class="pesquisa">
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="content" id="movies">
+        <!-- Cards de filmes serão carregados aqui -->
+    </div>
+
+    <!-- Inclusão do script -->
+    <script src="/public/js/explorer.js"></script>
+</body>
+</html>
