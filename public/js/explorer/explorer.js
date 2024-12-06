@@ -1,3 +1,5 @@
+// MOSTRA OS FILMES E SÉRIES NA PÁGINA DE EXPLORAÇÃO
+
 const movieContainer = document.getElementById("movies"); // Aonde os cards de filmes serão inseridos
 
 async function fetchMovies() {
@@ -27,26 +29,18 @@ function createMovieCard(media) {
 
   // Preenche o conteúdo do card com as informações recebidas da API
   card.innerHTML = `
-    <div class="movie-poster">
-        <img src="https://image.tmdb.org/t/p/w500${poster_path}" alt="${
+    <a href="detalhes.html?id=${id}">
+      <div class="content">
+          <div class="title">${title || name}</div>
+          <img src="https://image.tmdb.org/t/p/w500${poster_path}" alt="${
     title || name
   }" />
-    </div>
-    <!-- Aqui passamos o ID na URL do link -->
-    <a href="detalhes.html?id=${id}">
-      <div class="movie-details">
-          <div class="movie-title">${title || name}</div>
-          <div class="movie-rating">
-              <i class="fas fa-star"> </i>
-              <img src="/public/images/detalheSerie/estrela.png" class="estrela">
-              <span>${vote_average || "N/A"}</span>
-              <i class="fas fa-heart"> </i>
-              <img src="/public/images/detalheSerie/coracao.png" class="coracao">
-              <span>Favoritar</span>
+          <div class="rating">
+              <i class="fas fa-star"></i> ${vote_average}
           </div>
-          <div class="movie-description">
-              ${overview || "Descrição não disponível."}
-          </div>
+          <button class="save">
+              <img src="/public/images/detalheSerie/coracao.png"> Favoritar
+          </button>
       </div>
     </a>
   `;
