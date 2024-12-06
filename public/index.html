@@ -10,49 +10,28 @@
 <body>
     <header>
         <div class="container">
-          <div class="nav-logo">
-            <a href="index.html">
-                <img src="/public/images/homePage/logo.png" alt="Logotipo da página" class="logo"/> <h1>PucFlix</h1>
-            </a>
-            <a href="explorer.html" class="buscar">
-                <img src="/public/images/homePage/lupa.png" class="explorar">
-            </a>
-          </div>
-          
-            <nav aria-label="Navegação principal" class="navigation">
-                <a href="#popular-series">Séries Populares</a>
-                <a href="#new-series">Novas Séries</a>
-                <a href="#student-info">Informações</a>
-                <a href="#my-series">Minhas Séries</a>
-            </nav>
+            <div class="nav-logo">  
+                <a href="index.html">
+                    <img src="/public/images/homePage/logo.png" class="logo"/> <h1>PucFlix</h1>
+                </a>
+                <div class="pesquisar">
+                    <input type="text" id="search-input" placeholder="Pesquisar">
+                    <button class="search-button" id="search-button">
+                        <img src="/public/images/explorador/pesquisar.png" class="pesquisa">
+                    </button>
+                </div>
+            </div>
         </div>
     </header>
 
     <main class="container">
-        <section id="popular-series" class="popular-series">
-            <h2>Séries Populares</h2>
-            <div class="carousel">
-                <button class="nav left" aria-label="Voltar série">
-                    <i class="fas fa-chevron-left"></i>
-                </button>
-                
-                <img src="" alt="Imagem de série popular" class="carousel-image"/>
-
-                <button class="nav right" aria-label="Avançar série">
-                    <i class="fas fa-chevron-right"></i>
-                </button>
-            </div>
-        </section>
+        <h2>Filmes Populares</h2>
+        <div class="filmes" id="movies"></div>
 
         <section id="new-series" class="new-series">
             <h2>Novas Séries</h2>
             <div class="series-grid">
-                <!-- Elementos gerados dinamicamente -->
-                <div class="series-item">
-                    <img src="" alt="Capa da nova série" />
-                    <p class="description">Descrição breve da série</p>
-                </div>
-                <!-- Copiar estrutura para mais séries -->
+                <!-- Elementos gerados dinamicamente aqui -->
             </div>
         </section>
 
@@ -71,13 +50,14 @@
         <section id="my-series" class="my-series">
             <h2>Minhas Séries</h2>
             <div class="series-grid">
-                <div class="series-item">
-                    <img src="" alt="Capa de série assistida" />
-                    <p class="description">Descrição breve da minha série</p>
-                </div>
-                <!-- Copiar estrutura para mais séries -->
+                <!-- Aqui, adicione uma estrutura para as séries geradas dinamicamente -->
             </div>
         </section>
     </main>
+
+    <!-- Corrigido o caminho do script para o arquivo correto -->
+    <script src="/public/js/homePage/pesquisa.js"></script>
+    <!-- Corrigido o caminho do arquivo do explorer -->
+    <script src="/public/js/explorer/explorer.js"></script>
 </body>
 </html>
