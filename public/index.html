@@ -5,7 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Tela 1 - Home-Page</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet"/>
     <link href="/public/css/style.css" rel="stylesheet" />
+    <link rel="stylesheet" href="/public/css/info.css">
 </head>
 <body>
     <header>
@@ -26,38 +28,58 @@
 
     <main class="container">
         <h2>Filmes Populares</h2>
-        <div class="filmes" id="movies"></div>
+        <div class="filmes" id="movies">
+            <!-- Elementos gerados dinamicamente aqui -->
+        </div>
 
         <section id="new-series" class="new-series">
             <h2>Novas Séries</h2>
-            <div class="series-grid">
+            <div id="newSeries" class="newSeries">
                 <!-- Elementos gerados dinamicamente aqui -->
             </div>
         </section>
 
         <section id="student-info" class="student-info">
-            <h2>Informações do Aluno</h2>
-            <p>Este layout é personalizado e contém:</p>
-            <ul>
-                <li>Imagem</li>
-                <li>Nome</li>
-                <li>Mini bio</li>
-                <li>Redes sociais</li>
-                <li>Curso e turma</li>
-            </ul>
+            <div class="student-profile">
+
+            <img class="student-image" src="/public/images/homePage/gabriel.jfif"/>
+
+                <div class="student-details">
+                    <h2 class="student-name">Gabriel Victor Souza Lopes</h2>
+                    <p class="student-description">
+                    Estudante de Engenharia de Software apaixonado por tecnologia e inovação. Sempre em busca de novos desafios e aprendizados.
+                    </p>
+                    <div class="social-links">
+                    <a href="https://facebook.com"  class="social-icon">
+                        <img src="/public/images/homePage/github.png" alt="">
+                    </a>
+                    <a href="https://linkedin.com"  class="social-icon">
+                        <img src="/public/images/homePage/linkedin.png" alt="">
+                    </a>
+                    </div>
+                    <div class="course-details">
+                    <p class="course-name">Curso: Engenharia de Software</p>
+                    <p class="course-class">Pontifícia Universidade Católica de Minas Gerais</p>
+                    </div>
+                </div>
+            </div>
         </section>
 
         <section id="my-series" class="my-series">
             <h2>Minhas Séries</h2>
             <div class="series-grid">
-                <!-- Aqui, adicione uma estrutura para as séries geradas dinamicamente -->
+                <!-- Elementos gerados dinamicamente aqui -->
             </div>
         </section>
     </main>
 
-    <!-- Corrigido o caminho do script para o arquivo correto -->
+    <!-- Barra de pesquisa -->
     <script src="/public/js/homePage/pesquisa.js"></script>
-    <!-- Corrigido o caminho do arquivo do explorer -->
-    <script src="/public/js/explorer/explorer.js"></script>
+    <!-- Filmes populares -->
+    <script src="/public/js/homePage/populares.js"></script>
+    <!-- Novas Séries -->
+    <script src="/public/js/homePage/newSeries.js"></script>
+    <!-- Minhas Séries -->
+    <script src="/public/js/homePage/favoritos.js"></script>
 </body>
 </html>
