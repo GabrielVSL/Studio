@@ -3,7 +3,7 @@
   --primary-color: #facc15;
   --secondary-color: #020617;
   --text-color: #fff;
-  --font-family: "Arial", sans-serif;
+  --font-family:  'Roboto', sans-serif;
 }
 
 /* Reset básico */
@@ -183,6 +183,13 @@ section h2 {
   justify-content: center; /* Centraliza os cards horizontalmente */
 }
 
+.newSeries {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px; /* Espaço entre os cards */
+  justify-content: center; /* Centraliza os cards horizontalmente */
+}
+
 /* Estilo dos cards */
 .content {
   display: flex;
@@ -230,8 +237,8 @@ section h2 {
   justify-content: center;
   align-items: center;
   margin-top: 15px;
-  background-color: #ffcc00;
-  color: #fff;
+  background-color: var(--primary-color);
+  color: #fc5d5a;
   border: none;
   padding: 10px 20px;
   border-radius: 5px;
