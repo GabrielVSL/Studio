@@ -9,11 +9,32 @@ app.use(cors());
 
 const API_KEY = "457f195a42d96b0e9f6f6bbf413a23ad"; // Substitua pela sua chave da API do TMDb
 
-// Endpoint para buscar tendências de séries e filmes
-app.get("/api/series", async (req, res) => {
+// Endpoint para buscar series que vão ao ar em até 7 dias
+https: app.get("/api/newSeries", async (req, res) => {
   try {
     const response = await axios.get(
-      "https://api.themoviedb.org/3/trending/all/day",
+      "https://api.themoviedb.org/3/tv/on_the_air",
+      {
+        params: {
+          api_key: API_KEY,
+          include_adult: true,
+          language: "pt-BR",
+          page: 1,
+        },
+      }
+    );
+    res.json(response.data); // Envia os dados para o front-end
+  } catch (error) {
+    console.error("Erro ao buscar tendências:", error.message);
+    res.status(500).json({ error: "Erro ao buscar dados da API" });
+  }
+});
+
+// Endpoint para buscar tendências de séries e filmes
+https: app.get("/api/series", async (req, res) => {
+  try {
+    const response = await axios.get(
+      "https://api.themoviedb.org/3/trending/tv/day",
       {
         params: {
           api_key: API_KEY,
