@@ -22,8 +22,7 @@ body {
 
 /* Estilo do container */
 .container {
-  width: 90%;
-  max-width: 1200px;
+  width: 100%;
   margin: 0 auto;
   padding: 20px;
 }
@@ -38,6 +37,48 @@ body {
 
 .container .buscar {
   margin-left: auto;
+}
+
+.container h2 {
+  color: var(--primary-color);
+  padding: 20px;
+}
+
+header .pesquisar {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  margin-left: auto;
+}
+
+.pesquisar input {
+  border: none;
+  background-color: #4b4b4b;
+  outline: none;
+  padding: 8px;
+  width: 300px;
+  border-radius: 15px;
+  color: gray;
+  font-size: 15px;
+}
+
+header .pesquisa {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 20px;
+  margin-left: auto;
+}
+
+header .search-button {
+  cursor: pointer;
+  border-style: none;
+  background-color: #020617;
+  margin-left: 5px;
+  transition: 0.3s;
+}
+header .search-button:hover {
+  scale: 1.2;
 }
 
 /* Header */
@@ -132,4 +173,83 @@ section h2 {
   cursor: pointer;
   color: var(--primary-color);
   font-size: 24px;
+}
+
+/* Contêiner para os cards */
+.filmes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px; /* Espaço entre os cards */
+  justify-content: center; /* Centraliza os cards horizontalmente */
+}
+
+/* Estilo dos cards */
+.content {
+  display: flex;
+  flex-direction: column;
+  background-color: #020617;
+  border-radius: 10px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  width: 300px;
+  text-align: center;
+}
+
+.content img {
+  display: flex;
+  margin: 0 auto;
+  width: auto;
+  height: 250px;
+}
+
+.content {
+  padding: 10px;
+}
+
+.content .title {
+  font-size: 18px;
+  font-weight: bold;
+  margin-bottom: 10px;
+}
+
+.content .rating {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 10px;
+  margin-top: 10px;
+}
+
+.content .rating i {
+  color: #ffcc00;
+  margin-right: 5px;
+  display: flex;
+}
+
+.content .save {
+  justify-content: center;
+  align-items: center;
+  margin-top: 15px;
+  background-color: #ffcc00;
+  color: #fff;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 16px;
+  height: 50px;
+  font-weight: bold;
+  transition: 1s;
+  width: 200px;
+  margin: 0 auto;
+  margin-top: 10px;
+}
+
+.content .save img {
+  height: 15px;
+  width: auto;
+}
+.content .save:hover {
+  scale: 1.1;
+  background-color: red;
 }
