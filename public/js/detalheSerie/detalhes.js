@@ -5,9 +5,9 @@ document.addEventListener("DOMContentLoaded", async function () {
 
   if (seriesId) {
     try {
-      // 2. Requisição para buscar os detalhes da série usando o ID
+      // 2. Requisição para buscar os detalhes da série usando o ID, agora através do seu backend
       const response = await fetch(
-        `https://api.themoviedb.org/3/tv/${seriesId}?api_key=457f195a42d96b0e9f6f6bbf413a23ad&language=pt-BR`
+        `https://portal-de-series-five.vercel.app/api/series/${seriesId}`
       );
       const movieData = await response.json();
 
@@ -16,24 +16,44 @@ document.addEventListener("DOMContentLoaded", async function () {
         displayMovieDetails(movieData);
       } else {
         console.log("Detalhes da série não encontrados.");
+        // Aqui você pode exibir uma mensagem de erro no front-end.
       }
     } catch (error) {
       console.error("Erro ao buscar os detalhes da série:", error);
+      // Exibir uma mensagem de erro caso a requisição falhe
     }
   } else {
     console.log("ID da série não encontrado na URL.");
+    // Exibir uma mensagem se não encontrar o ID
   }
 });
 
 // Função para exibir os detalhes da série na página
 function displayMovieDetails(movie) {
-  const movieDetailsSection = document.querySelector(".movie-details"); // Ajuste aqui para o contêiner correto
+  const movieDetailsSection = document.querySelector(".movie-details");
+
+  // Verifica se os campos são válidos antes de usá-los
+  const posterPath = movie.poster_path
+    ? `https://image.tmdb.org/t/p/w500${movie.poster_path}`
+    : "caminho/para/imagem-padrão.jpg";
+  const castList =
+    movie.cast && movie.cast.length > 0
+      ? movie.cast
+          .map(
+            (actor) => `
+      <div class="ator">
+        <li><img src="https://image.tmdb.org/t/p/w500${actor.profile_path}" alt="${actor.name}" />${actor.name}</li>
+      </div>
+    `
+          )
+          .join("")
+      : "<li>Elenco não disponível.</li>";
 
   // Estrutura básica para exibir os detalhes
   movieDetailsSection.innerHTML = `
     <div class="info">
       <div class="esquerda">
-        <img src="https://image.tmdb.org/t/p/w500${movie.poster_path}" alt="${
+        <img src="${posterPath}" alt="${
     movie.title || movie.name
   }" width="300" height="450" />
       </div>
@@ -58,21 +78,7 @@ function displayMovieDetails(movie) {
 
         <section class="cast">
           <h3>Elenco Principal:</h3>
-          <ul>
-            ${
-              movie.cast
-                ? movie.cast
-                    .map(
-                      (actor) => `
-              <div class="ator">
-                <li><img src="https://image.tmdb.org/t/p/w500${actor.profile_path}" alt="${actor.name}" />${actor.name}</li>
-              </div>
-            `
-                    )
-                    .join("")
-                : "<li>Elenco não disponível.</li>"
-            }
-          </ul>
+          <ul>${castList}</ul>
         </section>
       </div>
     </div>
