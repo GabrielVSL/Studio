@@ -8,11 +8,10 @@ const app = express();
 // Configura o CORS para permitir todas as origens
 app.use(cors());
 
-
 const API_KEY = process.env.API_KEY;
 
-// Endpoint para buscar series que vão ao ar em até 7 dias
-https: app.get("/api/newSeries", async (req, res) => {
+// Endpoint para buscar séries que vão ao ar em até 7 dias
+app.get("/api/newSeries", async (req, res) => {
   try {
     const response = await axios.get(
       "https://api.themoviedb.org/3/tv/on_the_air",
@@ -33,7 +32,7 @@ https: app.get("/api/newSeries", async (req, res) => {
 });
 
 // Endpoint para buscar tendências de séries e filmes
-https: app.get("/api/series", async (req, res) => {
+app.get("/api/series", async (req, res) => {
   try {
     const response = await axios.get(
       "https://api.themoviedb.org/3/trending/tv/day",
@@ -105,4 +104,5 @@ app.get("/api/search", async (req, res) => {
 app.listen(3000, () => {
   console.log("Servidor rodando na porta 3000");
 });
+
 module.exports = app;
