@@ -100,9 +100,5 @@ app.get("/api/search", async (req, res) => {
   }
 });
 
-// Inicia o servidor na porta 3000
-app.listen(3000, () => {
-  console.log("Servidor rodando na porta 3000");
-});
-
+// Inicia o servidor de maneira serverless no Vercel
 module.exports = app;
