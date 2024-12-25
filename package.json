@@ -4,7 +4,7 @@
   "description": "Um portal de series criado com o objetivo de entender melhor node e a api \"The Movie DB API",
   "main": "api/index.js",
   "scripts": {
-    "start": "node server/index.js",
+    "start": "node api/index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
