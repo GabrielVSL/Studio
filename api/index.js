@@ -5,8 +5,12 @@ require("dotenv").config(); // Carrega as variáveis do arquivo .env
 
 const app = express();
 
-// Configura o CORS para permitir todas as origens
-app.use(cors());
+// Configura o CORS para permitir apenas origens específicas (como o front-end hospedado no Vercel)
+app.use(
+  cors({
+    origin: "https://portal-de-series-five.vercel.app", // Substitua pelo domínio do seu front-end
+  })
+);
 
 const API_KEY = process.env.API_KEY;
 
@@ -26,7 +30,7 @@ app.get("/api/newSeries", async (req, res) => {
     );
     res.json(response.data); // Envia os dados para o front-end
   } catch (error) {
-    console.error("Erro ao buscar tendências:", error.message);
+    console.error("Erro ao buscar novas séries:", error.message);
     res.status(500).json({ error: "Erro ao buscar dados da API" });
   }
 });
@@ -47,18 +51,18 @@ app.get("/api/series", async (req, res) => {
     );
     res.json(response.data); // Envia os dados para o front-end
   } catch (error) {
-    console.error("Erro ao buscar tendências:", error.message);
+    console.error("Erro ao buscar séries em tendência:", error.message);
     res.status(500).json({ error: "Erro ao buscar dados da API" });
   }
 });
 
 // Endpoint para buscar detalhes de um filme ou série por ID
 app.get("/api/series/:id", async (req, res) => {
-  const movieId = req.params.id; // Pega o ID do filme da URL
+  const movieId = req.params.id; // Pega o ID do filme ou série da URL
 
   try {
     const response = await axios.get(
-      `https://api.themoviedb.org/3/movie/${movieId}`,
+      `https://api.themoviedb.org/3/tv/${movieId}`, // Corrigido para `/tv/` em vez de `/movie/`
       {
         params: {
           api_key: API_KEY,
@@ -68,8 +72,8 @@ app.get("/api/series/:id", async (req, res) => {
     );
     res.json(response.data); // Envia os dados para o front-end
   } catch (error) {
-    console.error("Erro ao buscar detalhes:", error.message);
-    res.status(500).json({ error: "Erro ao buscar os detalhes do filme" });
+    console.error("Erro ao buscar detalhes da série:", error.message);
+    res.status(500).json({ error: "Erro ao buscar os detalhes da série" });
   }
 });
 
@@ -100,5 +104,10 @@ app.get("/api/search", async (req, res) => {
   }
 });
 
-// Inicia o servidor de maneira serverless no Vercel
+// Inicia o servidor na porta 3000
+// O Vercel utiliza uma porta dinâmica, então a porta 3000 pode ser substituída por process.env.PORT
+app.listen(process.env.PORT || 3000, () => {
+  console.log("Servidor rodando na porta 3000");
+});
+
 module.exports = app;
