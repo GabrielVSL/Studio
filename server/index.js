@@ -1,13 +1,15 @@
 const express = require("express");
 const axios = require("axios");
 const cors = require("cors"); // Importa o pacote cors
+require("dotenv").config(); // Carrega as variáveis do arquivo .env
 
 const app = express();
 
 // Configura o CORS para permitir todas as origens
 app.use(cors());
 
-const API_KEY = "457f195a42d96b0e9f6f6bbf413a23ad"; // Substitua pela sua chave da API do TMDb
+
+const API_KEY = process.env.API_KEY;
 
 // Endpoint para buscar series que vão ao ar em até 7 dias
 https: app.get("/api/newSeries", async (req, res) => {
