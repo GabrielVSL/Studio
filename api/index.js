@@ -8,7 +8,7 @@ const app = express();
 // Configura o CORS para permitir apenas origens específicas (como o front-end hospedado no Vercel)
 app.use(
   cors({
-    origin: "https://portal-de-series-five.vercel.app", // Substitua pelo domínio do seu front-end
+    origin: "*", // Substitua pelo domínio do seu front-end
   })
 );
 
