@@ -284,6 +284,11 @@ section h2 {
     padding: 5px;
   }
 
+  .filmes {
+    width: 200px;
+    height: auto;
+    max-width: 200px;
+  }
   .content {
     width: 90%;
     margin: 0 auto;
