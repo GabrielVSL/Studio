@@ -44,7 +44,7 @@ function createMovieCard(media) {
               <i class="fas fa-star"></i> ${vote_average || "N/A"}
           </div>
           <button class="save">
-              <img src="/public/images/detalheSerie/coracao.png" alt="Favoritar"> Favoritar
+              <img src="images/detalheSerie/coracao.png" alt="Favoritar"> Favoritar
           </button>
       </div>
     </a>

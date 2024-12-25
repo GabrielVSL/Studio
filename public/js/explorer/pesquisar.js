@@ -6,7 +6,9 @@ async function searchMovies(query) {
   try {
     // Fazendo a requisição GET para o servidor com a query
     const response = await fetch(
-      `http://localhost:3000/api/search?query=${encodeURIComponent(query)}`
+      `https://portal-de-series-five.vercel.app/api/search?query=${encodeURIComponent(
+        query
+      )}`
     );
     const data = await response.json();
 
@@ -48,10 +50,10 @@ function createMovieCard(media) {
           <div class="movie-title">${title || name}</div>
           <div class="movie-rating">
               <i class="fas fa-star"></i>
-              <img src="/public/images/detalheSerie/estrela.png" class="estrela">
+              <img src="images/detalheSerie/estrela.png" class="estrela">
               <span>${vote_average || "N/A"}</span>
               <i class="fas fa-heart"></i>
-              <img src="/public/images/detalheSerie/coracao.png" class="coracao">
+              <img src="images/detalheSerie/coracao.png" class="coracao">
               <span>Favoritar</span>
           </div>
           <div class="movie-description">
