@@ -2,7 +2,7 @@
   "name": "portal-de-series",
   "version": "1.0.0",
   "description": "Um portal de series criado com o objetivo de entender melhor node e a api \"The Movie DB API",
-  "main": "server/index.js",
+  "main": "api/index.js",
   "scripts": {
     "start": "node server/index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
