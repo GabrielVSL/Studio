@@ -5,7 +5,9 @@ const newSeriesContainer = document.getElementById("newSeries"); // Aonde os car
 async function fetchNewSeries() {
   try {
     // Fazendo uma requisição GET para o servidor
-    const response = await fetch("http://localhost:3000/api/newSeries");
+    const response = await fetch(
+      "https://portal-de-series-five.vercel.app/api/newSeries"
+    );
     const data = await response.json(); // Espera o retorno em formato JSON
 
     // Verifica se existem séries na resposta e cria os cards
@@ -39,7 +41,7 @@ function createNewSeriesCard(media) {
               <i class="fas fa-star"></i> ${vote_average}
           </div>
           <button class="save">
-              <img src="/public/images/detalheSerie/coracao.png"> Favoritar
+              <img src="images/detalheSerie/coracao.png"> Favoritar
           </button>
       </div>
     </a>
