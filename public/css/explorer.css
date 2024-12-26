@@ -124,3 +124,64 @@ header .search-button:hover {
   border-radius: 10px;
   object-fit: cover;
 }
+
+/* Responsividade */
+@media (max-width: 768px) {
+  header {
+    flex-direction: column;
+    padding: 10px;
+  }
+
+  .nav-logo {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .pesquisar {
+    margin-top: 10px;
+    width: 100%;
+    justify-content: center;
+  }
+
+  .pesquisar input {
+    width: 90%;
+    font-size: 14px;
+  }
+
+  .content {
+    padding: 10px;
+    gap: 15px;
+  }
+
+  .movie {
+    width: 150px;
+    height: 200px;
+    font-size: 16px;
+  }
+
+  .movie img {
+    height: 100%;
+    object-fit: cover;
+  }
+}
+
+@media (max-width: 480px) {
+  header {
+    padding: 5px;
+  }
+
+  .pesquisar input {
+    font-size: 12px;
+    padding: 5px;
+  }
+
+  .movie {
+    width: 120px;
+    height: 180px;
+    font-size: 14px;
+  }
+
+  .movie img {
+    border-radius: 8px;
+  }
+}

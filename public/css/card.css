@@ -58,3 +58,73 @@ body {
   margin-top: 20px;
   line-height: 1.6;
 }
+
+/* Responsividade */
+@media (max-width: 768px) {
+  .filmes {
+    flex-direction: column;
+    align-items: center;
+    padding: 15px;
+    text-align: center;
+  }
+
+  .movie-poster img {
+    width: 150px;
+  }
+
+  .movie-details {
+    margin-left: 0;
+    margin-top: 15px;
+  }
+
+  .movie-title {
+    font-size: 20px;
+  }
+
+  .movie-rating {
+    justify-content: center;
+  }
+
+  .movie-description {
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .filmes {
+    padding: 10px;
+    margin: 15px auto;
+  }
+
+  .movie-poster img {
+    width: 180px;
+    height: auto;
+  }
+
+  .movie-title {
+    font-size: 18px;
+  }
+
+  .movie-description {
+    font-size: 14px;
+    margin-top: 10px;
+    line-height: 1.4em; /* Ajuste conforme necessário */
+    max-height: 4.2em; /* Ajuste conforme necessário (3 linhas * 1.4em line-height) */
+    overflow: hidden;
+    position: relative;
+  }
+
+  .movie-description::after {
+    content: "...";
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    background: inherit;
+    padding-left: 5px;
+  }
+
+  .movie-rating .estrela,
+  .movie-rating .coracao {
+    width: 12px;
+  }
+}

@@ -350,8 +350,9 @@ section h2 {
   }
 
   .content {
-    width: 100%;
-    max-width: 150px;
+    width: 90%;
+    max-width: 160px;
+    width: 170px;
   }
 
   .content img {
