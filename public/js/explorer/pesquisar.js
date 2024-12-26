@@ -49,10 +49,8 @@ function createMovieCard(media) {
       <div class="movie-details">
           <div class="movie-title">${title || name}</div>
           <div class="movie-rating">
-              <i class="fas fa-star"></i>
               <img src="images/detalheSerie/estrela.png" class="estrela">
               <span>${vote_average || "N/A"}</span>
-              <i class="fas fa-heart"></i>
               <img src="images/detalheSerie/coracao.png" class="coracao">
               <span>Favoritar</span>
           </div>
