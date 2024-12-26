@@ -41,7 +41,7 @@ function createMovieCard(media) {
           <div class="title">${title || name}</div>
           <img src="${posterUrl}" alt="${title || name}" />
           <div class="rating">
-              <i class="fas fa-star"></i> ${vote_average || "N/A"}
+              <i class="fas fa-star"></i> ${vote_average ? vote_average.toFixed(1) : "N/A"}
           </div>
           <button class="save">
               <img src="images/detalheSerie/coracao.png" alt="Favoritar"> Favoritar
