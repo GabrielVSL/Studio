@@ -284,27 +284,28 @@ section h2 {
     padding: 5px;
   }
 
-  .filmes {
-    width: 200px;
-    height: auto;
-    max-width: 200px;
-  }
   .content {
-    width: 90%;
-    margin: 0 auto;
+    max-width: 180px;
+    width: 180px;
   }
 
   .content img {
-    height: 200px;
+    width: 150px;
   }
 
   .content .title {
-    font-size: 16px;
-  }
+    font-size: 12px; /* Diminui o tamanho da fonte */
+    white-space: nowrap; /* Impede quebra de linha */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin: 0 1px;
+    padding: 0 10px; /* Adiciona padding para centralizar o texto */
+    text-align: center; /* Centraliza o texto */
+}
 
   .content .save {
     font-size: 14px;
-    padding: 8px 16px;
+    padding: 4px 8px;
     width: 90%;
   }
 }
@@ -320,9 +321,10 @@ section h2 {
   }
 
   header .pesquisar {
-    flex-direction: column;
+    flex-direction: row; /* Alinha os itens em uma linha */
     align-items: center;
-  }
+    margin: 0 auto;
+}
 
   .pesquisar input {
     font-size: 12px;
@@ -330,24 +332,35 @@ section h2 {
   }
 
   .container h2 {
-    font-size: 24px;
+    font-size: px;
   }
 
+  .filmes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px; /* Espaço entre os cards */
+  justify-content: center; /* Centraliza os cards horizontalmente */
+  margin: 0;
+}
   .series-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(3, 1fr);
     gap: 5px;
+    margin: 0;
+    padding: 0;
   }
 
   .content {
     width: 100%;
+    max-width: 150px;
   }
 
   .content img {
-    height: 150px;
+    width: 120px;
+    height: auto;
   }
 
   .content .title {
-    font-size: 14px;
+    font-size: 16px;
   }
 
   .content .save {
