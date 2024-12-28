@@ -38,7 +38,9 @@ function createNewSeriesCard(media) {
     title || name
   }" />
           <div class="rating">
-              <i class="fas fa-star"></i> ${vote_average}
+              <i class="fas fa-star"></i> ${
+                vote_average ? vote_average.toFixed(1) : "N/A"
+              }
           </div>
           <button class="save">
               <img src="images/detalheSerie/coracao.png"> Favoritar

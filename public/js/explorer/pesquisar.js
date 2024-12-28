@@ -41,16 +41,16 @@ function createMovieCard(media) {
   // Preenche o conteúdo do card com as informações recebidas
   card.innerHTML = `
     <div class="movie-poster">
+    <a href="detalhes.html?id=${id}">
         <img src="https://image.tmdb.org/t/p/w500${poster_path}" alt="${
     title || name
   }" />
     </div>
-    <a href="detalhes.html?id=${id}">
       <div class="movie-details">
           <div class="movie-title">${title || name}</div>
           <div class="movie-rating">
               <img src="images/detalheSerie/estrela.png" class="estrela">
-              <span>${vote_average || "N/A"}</span>
+              <span>${vote_average ? vote_average.toFixed(1) : "N/A"}</span>
               <img src="images/detalheSerie/coracao.png" class="coracao">
               <span>Favoritar</span>
           </div>
