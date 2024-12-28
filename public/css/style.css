@@ -241,6 +241,11 @@ section h2 {
   scale: 1.1;
   background-color: red;
 }
+.student-details .student-name {
+    margin: 0;
+    font-size: 24px;
+    color: var(--primary-color);
+}
 
 /* Responsividade para dispositivos móveis */
 @media (max-width: 768px) {
@@ -335,7 +340,7 @@ section h2 {
     font-size: px;
   }
 
-  .filmes {
+  .filmes, .newSeries {
   display: flex;
   flex-wrap: wrap;
   gap: 10px; /* Espaço entre os cards */
