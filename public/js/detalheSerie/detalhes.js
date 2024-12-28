@@ -75,17 +75,18 @@ function displayMovieDetails(movie) {
             movie.overview || "Descrição não disponível."
           }</p>
         </div>
-
-        <section class="cast">
-          <h3>Elenco Principal:</h3>
-          <ul>${castList}</ul>
-        </section>
       </div>
+    </div>
+    <div class="elenco">
+      <section class="cast">
+        <h3>Elenco Principal:</h3>
+        <ul>${castList}</ul>
+      </section>
     </div>
 
     <div class="rating">
       <i class="fas fa-star"></i>
-      <span>${movie.vote_average || "N/A"}</span>
+      <span>${movie.vote_average ? movie.vote_average.toFixed(1) : "N/A"}</span>
     </div>
 
     <button class="action-button">Adicionar aos Favoritos</button>
