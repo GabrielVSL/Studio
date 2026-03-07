@@ -58,19 +58,21 @@ app.get("/api/series", async (req, res) => {
 
 // Endpoint para buscar detalhes de um filme ou série por ID
 app.get("/api/series/:id", async (req, res) => {
-  const movieId = req.params.id; // Pega o ID do filme ou série da URL
+  const movieId = req.params.id; 
 
   try {
     const response = await axios.get(
-      `https://api.themoviedb.org/3/tv/${movieId}`, // Corrigido para `/tv/` em vez de `/movie/`
+      `https://api.themoviedb.org/3/tv/${movieId}`, 
       {
         params: {
           api_key: API_KEY,
           language: "pt-BR",
+          append_to_response: "credits,videos", // Traz elenco e vídeos juntos!
+          include_video_language: "pt,en" // Se não achar trailer BR, pega o gringo
         },
       }
     );
-    res.json(response.data); // Envia os dados para o front-end
+    res.json(response.data); 
   } catch (error) {
     console.error("Erro ao buscar detalhes da série:", error.message);
     res.status(500).json({ error: "Erro ao buscar os detalhes da série" });
