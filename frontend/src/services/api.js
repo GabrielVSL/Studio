@@ -35,14 +35,15 @@ export const getSeriesDetails = async (id) => {
   }
 };
 
-// Substitui a chamada de API do pesquisar.js
+// Busca séries baseadas no texto digitado (Pesquisa)
 export const searchSeries = async (query) => {
+  if (!query) return [];
   try {
     const response = await fetch(`${BASE_URL}/search?query=${encodeURIComponent(query)}`);
     const data = await response.json();
-    return data.results;
+    return data.results || [];
   } catch (error) {
-    console.error("Erro ao pesquisar séries:", error);
+    console.error("Erro ao buscar séries:", error);
     return [];
   }
 };
@@ -94,3 +95,4 @@ export const getSeasonDetails = async (seriesId, seasonNumber) => {
     return [];
   }
 };
+
