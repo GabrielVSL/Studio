@@ -67,7 +67,8 @@ app.get("/api/series/:id", async (req, res) => {
         params: {
           api_key: API_KEY,
           language: "pt-BR",
-          append_to_response: "credits,videos", // Traz elenco e vídeos juntos!
+          // Apenas altere esta linha no seu backend:
+          append_to_response: "credits,videos,recommendations",
           include_video_language: "pt,en" // Se não achar trailer BR, pega o gringo
         },
       }
@@ -103,6 +104,44 @@ app.get("/api/search", async (req, res) => {
   } catch (error) {
     console.error("Erro ao buscar filmes ou séries:", error.message);
     res.status(500).json({ error: "Erro ao buscar dados da API" });
+  }
+});
+
+// 1. Endpoint para buscar a lista oficial de Gêneros (Ação, Comédia, etc)
+app.get("/api/genres", async (req, res) => {
+  try {
+    const response = await axios.get("https://api.themoviedb.org/3/genre/tv/list", {
+      params: {
+        api_key: API_KEY,
+        language: "pt-BR",
+      },
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error("Erro ao buscar gêneros:", error.message);
+    res.status(500).json({ error: "Erro ao buscar gêneros" });
+  }
+});
+
+// 2. Endpoint mágico do "Discover" para filtrar filmes por gênero e popularidade
+app.get("/api/discover", async (req, res) => {
+  const { genre, page = 1 } = req.query;
+
+  try {
+    const response = await axios.get("https://api.themoviedb.org/3/discover/tv", {
+      params: {
+        api_key: API_KEY,
+        language: "pt-BR",
+        sort_by: "popularity.desc", // Traz sempre os melhores primeiro
+        page: page,
+        with_genres: genre, // Aqui entra o ID do gênero clicado!
+        include_null_first_air_dates: false
+      },
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error("Erro no discover:", error.message);
+    res.status(500).json({ error: "Erro ao filtrar séries" });
   }
 });
 

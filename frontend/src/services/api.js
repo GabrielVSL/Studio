@@ -46,3 +46,32 @@ export const searchSeries = async (query) => {
     return [];
   }
 };
+
+// Busca a lista de botões (Ação, Aventura, etc)
+export const getGenres = async () => {
+  try {
+    const response = await fetch(`${BASE_URL}/genres`);
+    const data = await response.json();
+    return data.genres || [];
+  } catch (error) {
+    console.error("Erro ao buscar gêneros:", error);
+    return [];
+  }
+};
+
+// Busca os filmes filtrados por aquele botão específico
+export const discoverSeries = async (genreId, page = 1) => {
+  try {
+    // Se não tiver genreId, busca os populares normais
+    const url = genreId 
+      ? `${BASE_URL}/discover?genre=${genreId}&page=${page}`
+      : `${BASE_URL}/series?page=${page}`;
+      
+    const response = await fetch(url);
+    const data = await response.json();
+    return data.results || [];
+  } catch (error) {
+    console.error("Erro ao descobrir séries:", error);
+    return [];
+  }
+};
