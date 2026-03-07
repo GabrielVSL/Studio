@@ -1,32 +1,24 @@
-const express = require("express");
-const axios = require("axios");
-require("dotenv").config(); // Carrega as variáveis do arquivo .env
+import express from 'express';
+import axios from 'axios';
+import cors from 'cors';
+import 'dotenv/config'; // Forma moderna de carregar o .env
 
 const app = express();
 
-// CORS MODO FORÇA-BRUTA (Perfeito para Vercel, não precisa de npm install cors)
-app.use((req, res, next) => {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
-  }
-  next();
-});
+// Configura o CORS
+app.use(cors({ origin: "*" }));
 
 const API_KEY = process.env.API_KEY;
 
-// Endpoint para buscar séries que vão ao ar (AGORA COM PÁGINA DINÂMICA!)
+// Endpoint para buscar séries que vão ao ar
 app.get("/api/newSeries", async (req, res) => {
-  const page = req.query.page || 1; // Puxa a página solicitada pelo frontend
   try {
     const response = await axios.get("https://api.themoviedb.org/3/tv/on_the_air", {
       params: {
         api_key: API_KEY,
         include_adult: true,
         language: "pt-BR",
-        page: page, // Envia para o TMDB
+        page: 1,
       },
     });
     res.json(response.data);
@@ -36,16 +28,15 @@ app.get("/api/newSeries", async (req, res) => {
   }
 });
 
-// Endpoint para buscar tendências (AGORA COM PÁGINA DINÂMICA!)
+// Endpoint para buscar tendências
 app.get("/api/series", async (req, res) => {
-  const page = req.query.page || 1; // Puxa a página solicitada pelo frontend
   try {
     const response = await axios.get("https://api.themoviedb.org/3/trending/tv/day", {
       params: {
         api_key: API_KEY,
         include_adult: true,
         language: "pt-BR",
-        page: page, // Envia para o TMDB
+        page: 1,
       },
     });
     res.json(response.data);
@@ -55,7 +46,7 @@ app.get("/api/series", async (req, res) => {
   }
 });
 
-// Endpoint para buscar detalhes de um filme/série por ID
+// Endpoint para buscar detalhes com provedores de streaming
 app.get("/api/series/:id", async (req, res) => {
   const movieId = req.params.id; 
   try {
@@ -74,12 +65,11 @@ app.get("/api/series/:id", async (req, res) => {
   }
 });
 
-// Endpoint para buscar filmes/séries pelo texto
+// Endpoint de Pesquisa
 app.get("/api/search", async (req, res) => {
   const query = req.query.query;
-  if (!query) {
-    return res.status(400).json({ error: "Parâmetro 'query' é obrigatório" });
-  }
+  if (!query) return res.status(400).json({ error: "Query obrigatória" });
+
   try {
     const response = await axios.get("https://api.themoviedb.org/3/search/tv", {
       params: {
@@ -92,52 +82,40 @@ app.get("/api/search", async (req, res) => {
     });
     res.json(response.data);
   } catch (error) {
-    console.error("Erro ao buscar filmes/séries:", error.message);
-    res.status(500).json({ error: "Erro ao buscar dados da API" });
+    res.status(500).json({ error: "Erro na busca" });
   }
 });
 
-// Endpoint para buscar a lista de Gêneros (Ação, Comédia, etc)
+// Endpoint de Gêneros
 app.get("/api/genres", async (req, res) => {
   try {
     const response = await axios.get("https://api.themoviedb.org/3/genre/tv/list", {
-      params: {
-        api_key: API_KEY,
-        language: "pt-BR",
-      },
+      params: { api_key: API_KEY, language: "pt-BR" },
     });
     res.json(response.data);
   } catch (error) {
-    console.error("Erro ao buscar gêneros:", error.message);
     res.status(500).json({ error: "Erro ao buscar gêneros" });
   }
 });
 
-// Endpoint do "Discover" para filtrar
+// Endpoint Discover
 app.get("/api/discover", async (req, res) => {
-  // Agora pegamos vários filtros da URL!
-  const { genre, page = 1, year, rating, sort } = req.query;
-
+  const { genre, page = 1 } = req.query;
   try {
     const response = await axios.get("https://api.themoviedb.org/3/discover/tv", {
       params: {
         api_key: API_KEY,
         language: "pt-BR",
+        sort_by: "popularity.desc",
         page: page,
-        with_genres: genre, 
-        first_air_date_year: year, // Filtro de Ano
-        "vote_average.gte": rating, // Filtro de Nota Mínima
-        sort_by: sort || "popularity.desc", // Filtro de Ordenação
-        include_null_first_air_dates: false
+        with_genres: genre,
       },
     });
     res.json(response.data);
   } catch (error) {
-    console.error("Erro no discover:", error.message);
-    res.status(500).json({ error: "Erro ao filtrar séries" });
+    res.status(500).json({ error: "Erro no discover" });
   }
 });
 
-
-
-module.exports = app;
+// EXPORTAÇÃO PARA VERCEL (Substitui o module.exports)
+export default app;
