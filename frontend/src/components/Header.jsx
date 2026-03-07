@@ -23,7 +23,7 @@ const handleSearch = (e) => {
           <Link to="/" className="flex items-center gap-2 group text-white no-underline">
             <i className="fas fa-play text-yellow-400 text-xl group-hover:scale-110 transition-transform"></i>
             <h1 className="text-2xl font-black tracking-tighter bg-gradient-to-r from-yellow-400 to-yellow-200 bg-clip-text text-transparent">
-              DevFlix
+              BHFlix
             </h1>
           </Link>
           

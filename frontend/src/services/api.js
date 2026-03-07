@@ -1,5 +1,5 @@
 // URL base da sua API hospedada na Vercel
-const BASE_URL = "https://portal-de-series-five.vercel.app/api";
+const BASE_URL = "https://bhflix.vercel.app/api";
 
 export const getPopularSeries = async () => {
   try {
