@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { getSeriesDetails } from '../services/api';
+import { getSeriesDetails, getSeasonDetails } from '../services/api';
 import MovieCard from './MovieCard';
 
 export default function MovieDetails() {
   const { id } = useParams();
   const [movie, setMovie] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [selectedSeason, setSelectedSeason] = useState(null);
+  const [episodes, setEpisodes] = useState([]);
+  const [loadingEpisodes, setLoadingEpisodes] = useState(false);
 
   useEffect(() => {
     window.scrollTo(0, 0); 
@@ -17,6 +20,29 @@ export default function MovieDetails() {
     };
     fetchDetails();
   }, [id]);
+
+  // Efeito para carregar a 1ª temporada automaticamente quando a série carregar
+  useEffect(() => {
+    if (movie && movie.seasons && movie.seasons.length > 0) {
+      // Ignora a temporada 0 (geralmente são os Extras/Especiais) e pega a primeira oficial
+      const firstRealSeason = movie.seasons.find(s => s.season_number > 0) || movie.seasons[0];
+      if (firstRealSeason && !selectedSeason) {
+        setSelectedSeason(firstRealSeason.season_number);
+      }
+    }
+  }, [movie]);
+
+  // Efeito para buscar os episódios sempre que o usuário trocar de temporada
+  useEffect(() => {
+    const fetchEpisodes = async () => {
+      if (!selectedSeason || !id) return;
+      setLoadingEpisodes(true);
+      const eps = await getSeasonDetails(id, selectedSeason);
+      setEpisodes(eps);
+      setLoadingEpisodes(false);
+    };
+    fetchEpisodes();
+  }, [id, selectedSeason]);
 
   if (loading) return <div className="min-h-screen flex items-center justify-center text-yellow-400 text-3xl"><i className="fas fa-spinner fa-spin"></i></div>;
   if (!movie) return <div className="min-h-screen flex items-center justify-center text-white">Série não encontrada.</div>;
@@ -128,6 +154,78 @@ export default function MovieDetails() {
             )}
           </div>
         </div>
+
+        {/* NOVA SEÇÃO: TEMPORADAS E EPISÓDIOS */}
+        {movie.seasons && movie.seasons.length > 0 && (
+          <section className="mt-16 border-t border-white/10 pt-10 mb-16">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 mb-8">
+              <div className="flex items-center gap-3">
+                <div className="w-1.5 h-8 bg-yellow-400 rounded-full"></div>
+                <h3 className="text-3xl font-black text-white">Episódios</h3>
+              </div>
+
+              {/* Seletor de Temporada com visual Premium */}
+              <div className="relative">
+                <select
+                  value={selectedSeason || ''}
+                  onChange={(e) => setSelectedSeason(Number(e.target.value))}
+                  className="appearance-none bg-slate-800 text-white font-bold border border-white/10 rounded-xl px-5 py-3 pr-12 hover:border-yellow-400 focus:border-yellow-400 outline-none transition-all cursor-pointer shadow-inner w-full sm:w-auto min-w-[200px]"
+                >
+                  {movie.seasons.filter(s => s.season_number > 0).map(season => (
+                    <option key={season.id} value={season.season_number} className="bg-slate-900 py-2">
+                      {season.name} ({season.episode_count} eps)
+                    </option>
+                  ))}
+                </select>
+                <i className="fas fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"></i>
+              </div>
+            </div>
+
+            {/* Lista de Episódios */}
+            {loadingEpisodes ? (
+              <div className="flex justify-center py-12">
+                <i className="fas fa-circle-notch fa-spin text-4xl text-yellow-400"></i>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-4 max-h-[600px] overflow-y-auto custom-scrollbar pr-2 pb-2">
+                {episodes.map(ep => (
+                  <div key={ep.id} className="flex flex-col md:flex-row gap-5 bg-slate-900/40 p-4 rounded-2xl border border-white/5 hover:bg-slate-800/60 hover:border-white/10 transition-all duration-300 group">
+                    
+                    {/* Thumbnail do Episódio */}
+                    <div className="md:w-64 flex-shrink-0 relative rounded-xl overflow-hidden aspect-video bg-slate-950 shadow-lg">
+                      {ep.still_path ? (
+                        <img src={`https://image.tmdb.org/t/p/w500${ep.still_path}`} alt={ep.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" loading="lazy" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-gray-600"><i className="fas fa-tv text-3xl"></i></div>
+                      )}
+                      {/* Badge T1:E1 */}
+                      <div className="absolute top-2 left-2 bg-slate-950/90 px-2.5 py-1 rounded-lg text-xs font-black text-white backdrop-blur-sm border border-white/10 shadow-lg">
+                        T{selectedSeason}:E{ep.episode_number}
+                      </div>
+                    </div>
+
+                    {/* Textos do Episódio */}
+                    <div className="flex-1 flex flex-col justify-center">
+                      <div className="flex flex-wrap justify-between items-start gap-2 mb-2">
+                        <h4 className="text-xl font-bold text-gray-100 group-hover:text-yellow-400 transition-colors leading-tight">{ep.name}</h4>
+                        <div className="flex items-center gap-1.5 bg-yellow-400/10 px-2.5 py-1 rounded-lg border border-yellow-400/20 text-xs font-bold text-yellow-400 whitespace-nowrap">
+                          <i className="fas fa-star"></i> {ep.vote_average ? ep.vote_average.toFixed(1) : "N/A"}
+                        </div>
+                      </div>
+                      <p className="text-sm text-gray-400 line-clamp-3 leading-relaxed mb-3">
+                        {ep.overview || "Sinopse não disponível para este episódio."}
+                      </p>
+                      <div className="mt-auto flex items-center gap-4 text-xs font-bold text-gray-500">
+                        <span><i className="far fa-calendar-alt mr-1.5"></i> {ep.air_date ? new Date(ep.air_date).toLocaleDateString('pt-BR') : "Data desconhecida"}</span>
+                        <span><i className="far fa-clock mr-1.5"></i> {ep.runtime ? `${ep.runtime} min` : "-- min"}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
 
         {/* INDICAÇÕES DE FILMES (No final de tudo) */}
         {recommendations.length > 0 && (

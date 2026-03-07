@@ -65,6 +65,23 @@ app.get("/api/series/:id", async (req, res) => {
   }
 });
 
+// Endpoint para buscar os episódios de uma temporada específica
+app.get("/api/series/:id/season/:seasonNumber", async (req, res) => {
+  const { id, seasonNumber } = req.params;
+  try {
+    const response = await axios.get(`https://api.themoviedb.org/3/tv/${id}/season/${seasonNumber}`, {
+      params: {
+        api_key: API_KEY,
+        language: "pt-BR",
+      },
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error(`Erro ao buscar temporada ${seasonNumber}:`, error.message);
+    res.status(500).json({ error: "Erro ao buscar a temporada" });
+  }
+});
+
 // Endpoint de Pesquisa
 app.get("/api/search", async (req, res) => {
   const query = req.query.query;

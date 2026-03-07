@@ -31,6 +31,7 @@ const handleSearch = (e) => {
           <nav className="hidden md:flex gap-6 text-sm font-medium text-gray-300">
             <Link to="/" className="hover:text-white transition-colors">Início</Link>
             <Link to="/explorer" className="hover:text-white transition-colors">Explorar</Link>
+            <Link to="/minha-lista" className="hover:text-white transition-colors">Minha Lista</Link>
           </nav>
         </div>
 

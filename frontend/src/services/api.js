@@ -82,3 +82,15 @@ export const discoverSeries = async (genreId, page = 1, year = '', rating = '', 
     return [];
   }
 };
+
+// Busca os detalhes e episódios de uma temporada específica
+export const getSeasonDetails = async (seriesId, seasonNumber) => {
+  try {
+    const response = await fetch(`${BASE_URL}/series/${seriesId}/season/${seasonNumber}`);
+    const data = await response.json();
+    return data.episodes || []; // Retorna só a lista de episódios
+  } catch (error) {
+    console.error("Erro ao buscar episódios:", error);
+    return [];
+  }
+};

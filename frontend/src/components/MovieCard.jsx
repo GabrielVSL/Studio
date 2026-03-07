@@ -1,22 +1,52 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { isFavorite, toggleFavorite } from '../utils/storage';
 
 export default function MovieCard({ id, title, image, rating }) {
+  const [favorited, setFavorited] = useState(false);
+
+  // Assim que o card aparece, ele olha no navegador se já foi favoritado antes
+  useEffect(() => {
+    setFavorited(isFavorite(id));
+  }, [id]);
+
+  // Função disparada ao clicar no coração
+  const handleFavoriteClick = (e) => {
+    e.preventDefault(); // Impede que o clique no coração abra a página de detalhes!
+    const newState = toggleFavorite({ id, title, image, rating });
+    setFavorited(newState);
+  };
+
   return (
-    // A mágica acontece aqui: tiramos os tamanhos fixos e colocamos "w-full"
-    <Link to={`/detalhes/${id}`} className="group relative flex flex-col rounded-xl overflow-hidden cursor-pointer bg-slate-900 w-full aspect-[2/3] shadow-lg hover:shadow-yellow-400/20 transition-all duration-300 hover:-translate-y-2">
+    <Link to={`/series/${id}`} className="block relative group overflow-hidden rounded-2xl bg-slate-900 border border-white/5 shadow-lg transition-all duration-300 hover:scale-105 hover:shadow-yellow-400/20 hover:border-yellow-400/50">
       
-      <img src={image} alt={title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-      
-      <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent opacity-90 group-hover:opacity-100 transition-opacity"></div>
-      
-      <div className="absolute top-3 right-3 bg-black/60 backdrop-blur-sm text-yellow-400 text-xs font-bold px-2 py-1 rounded-md flex items-center gap-1">
-        <i className="fas fa-star"></i>
-        <span>{rating}</span>
+      {/* BOTÃO DE CORAÇÃO NO CANTO DIREITO */}
+      <button 
+        onClick={handleFavoriteClick}
+        className="absolute top-3 right-3 z-20 w-10 h-10 rounded-full bg-slate-950/60 backdrop-blur-md flex items-center justify-center transition-all duration-300 hover:bg-slate-900 hover:scale-110 border border-white/10"
+      >
+        <i className={`text-xl transition-colors ${favorited ? 'fas fa-heart text-red-500 drop-shadow-[0_0_8px_rgba(239,68,68,0.8)]' : 'far fa-heart text-white hover:text-red-400'}`}></i>
+      </button>
+
+      {/* IMAGEM DO FILME */}
+      <div className="aspect-[2/3] w-full overflow-hidden">
+        <img 
+          src={image} 
+          alt={title} 
+          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110 opacity-90 group-hover:opacity-100"
+          loading="lazy"
+        />
+        {/* Degradê escuro na parte de baixo para o texto aparecer bem */}
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent opacity-80 group-hover:opacity-90 transition-opacity"></div>
       </div>
 
-      <div className="absolute bottom-0 left-0 w-full p-4 transform translate-y-2 group-hover:translate-y-0 transition-transform">
-        <h3 className="text-white text-sm md:text-base font-bold line-clamp-2 leading-tight">
+      {/* TEXTOS (Nota e Título) */}
+      <div className="absolute bottom-0 w-full p-4 flex flex-col justify-end">
+        <div className="flex items-center gap-1.5 mb-1.5 bg-slate-950/80 w-max px-2 py-1 rounded-lg border border-white/10 backdrop-blur-sm">
+          <i className="fas fa-star text-yellow-400 text-xs"></i>
+          <span className="text-white text-xs font-bold">{rating}</span>
+        </div>
+        <h3 className="text-white font-bold text-sm md:text-base line-clamp-2 leading-tight group-hover:text-yellow-400 transition-colors">
           {title}
         </h3>
       </div>
