@@ -138,9 +138,6 @@ app.get("/api/discover", async (req, res) => {
   }
 });
 
-// Inicia o servidor
-app.listen(process.env.PORT || 3000, () => {
-  console.log("Servidor rodando");
-});
+
 
 module.exports = app;
