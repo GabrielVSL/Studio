@@ -7,3 +7,25 @@
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* Esconde a barra nativa em carrosséis horizontais */
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Estiliza a barra de rolagem vertical (para o Elenco) */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #facc15; /* Amarelo Tailwind */
+  border-radius: 8px;
+}

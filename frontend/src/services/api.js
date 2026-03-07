@@ -60,13 +60,20 @@ export const getGenres = async () => {
 };
 
 // Busca os filmes filtrados por aquele botão específico
-export const discoverSeries = async (genreId, page = 1) => {
+export const discoverSeries = async (genreId, page = 1, year = '', rating = '', sort = '') => {
   try {
-    // Se não tiver genreId, busca os populares normais
-    const url = genreId 
-      ? `${BASE_URL}/discover?genre=${genreId}&page=${page}`
-      : `${BASE_URL}/series?page=${page}`;
+    // Monta a URL dinâmica com os filtros que o usuário escolher
+    let url = `${BASE_URL}/discover?page=${page}`;
+    if (genreId) url += `&genre=${genreId}`;
+    if (year) url += `&year=${year}`;
+    if (rating) url += `&rating=${rating}`;
+    if (sort) url += `&sort=${sort}`;
       
+    // Se não tiver nenhum filtro ativado e for a página 1, pega os populares padrão
+    if (!genreId && !year && !rating && !sort) {
+      url = `${BASE_URL}/series?page=${page}`;
+    }
+
     const response = await fetch(url);
     const data = await response.json();
     return data.results || [];

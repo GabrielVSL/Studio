@@ -63,7 +63,7 @@ app.get("/api/series/:id", async (req, res) => {
       params: {
         api_key: API_KEY,
         language: "pt-BR",
-        append_to_response: "credits,videos,recommendations",
+        append_to_response: "credits,videos,recommendations,watch/providers",
         include_video_language: "pt,en" 
       },
     });
@@ -115,15 +115,19 @@ app.get("/api/genres", async (req, res) => {
 
 // Endpoint do "Discover" para filtrar
 app.get("/api/discover", async (req, res) => {
-  const { genre, page = 1 } = req.query;
+  // Agora pegamos vários filtros da URL!
+  const { genre, page = 1, year, rating, sort } = req.query;
+
   try {
     const response = await axios.get("https://api.themoviedb.org/3/discover/tv", {
       params: {
         api_key: API_KEY,
         language: "pt-BR",
-        sort_by: "popularity.desc", 
         page: page,
         with_genres: genre, 
+        first_air_date_year: year, // Filtro de Ano
+        "vote_average.gte": rating, // Filtro de Nota Mínima
+        sort_by: sort || "popularity.desc", // Filtro de Ordenação
         include_null_first_air_dates: false
       },
     });

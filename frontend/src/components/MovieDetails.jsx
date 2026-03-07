@@ -24,7 +24,10 @@ export default function MovieDetails() {
   const backdropUrl = movie.backdrop_path ? `https://image.tmdb.org/t/p/original${movie.backdrop_path}` : '';
   const posterUrl = movie.poster_path ? `https://image.tmdb.org/t/p/w500${movie.poster_path}` : "https://via.placeholder.com/500x750";
   const trailer = movie.videos?.results?.find(vid => vid.site === "YouTube" && vid.type === "Trailer") || movie.videos?.results?.[0];
-  
+  // Puxando os provedores de streaming do Brasil
+  const watchProviders = movie["watch/providers"]?.results?.BR;
+  // Pegamos apenas o "flatrate" (que significa streaming por assinatura, como Netflix)
+  const streamingPlatforms = watchProviders?.flatrate || [];
   // Pega os 8 primeiros atores para preencher o buraco abaixo do poster
   const castList = movie.credits?.cast?.slice(0, 8) || []; 
   const recommendations = movie.recommendations?.results || [];
@@ -39,7 +42,7 @@ export default function MovieDetails() {
         {backdropUrl && <img src={backdropUrl} alt="Background" className="w-full h-full object-cover opacity-30" />}
       </div>
 
-      <div className="container mx-auto px-4 lg:px-8 pt-24 md:pt-40 relative z-20">
+      <div className="container mx-auto px-4 lg:px-8 pt-24 md:pt-25 relative z-20">
         <Link to="/" className="inline-flex items-center gap-2 text-gray-400 hover:text-white mb-8 transition-colors">
           <i className="fas fa-arrow-left"></i> Voltar
         </Link>
@@ -47,25 +50,27 @@ export default function MovieDetails() {
         {/* ESTRUTURA PRINCIPAL (Esquerda: Poster+Elenco | Direita: Infos+Trailer) */}
         <div className="flex flex-col md:flex-row gap-8 lg:gap-12 mb-16">
           
-          {/* COLUNA ESQUERDA (Poster e Elenco tapando o buraco) */}
+          {/* COLUNA ESQUERDA (Poster e Elenco com Scroll) */}
           <div className="w-full md:w-1/3 lg:w-1/4 flex-shrink-0 flex flex-col gap-8">
             <img src={posterUrl} alt={movie.name || movie.title} className="w-full rounded-2xl shadow-2xl shadow-black/50 border border-white/10" />
             
-            {/* ELENCO AQUI! */}
+            {/* NOVO ELENCO COM SCROLL E 1 POR LINHA */}
             {castList.length > 0 && (
-              <div className="bg-slate-900/50 p-4 rounded-xl border border-white/5">
-                <h3 className="text-xl font-bold mb-4 text-white border-l-4 border-yellow-400 pl-3">Elenco</h3>
-                <div className="grid grid-cols-2 gap-4">
+              <div className="bg-slate-900/80 p-5 rounded-2xl border border-white/5 h-[295px] flex flex-col shadow-xl">
+                <h3 className="text-xl font-bold mb-4 text-white border-l-4 border-yellow-400 pl-3 flex-shrink-0">Elenco</h3>
+                
+                {/* O container que rola o conteúdo */}
+                <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-4">
                   {castList.map((actor) => (
-                    <div key={actor.id} className="flex items-center gap-3 group">
+                    <div key={actor.id} className="flex items-center gap-4 group p-2 rounded-lg hover:bg-white/5 transition-colors">
                       <img 
                         src={actor.profile_path ? `https://image.tmdb.org/t/p/w200${actor.profile_path}` : "https://via.placeholder.com/150"} 
                         alt={actor.name} 
-                        className="w-12 h-12 rounded-full object-cover border border-transparent group-hover:border-yellow-400 transition-colors" 
+                        className="w-14 h-14 rounded-full object-cover border-2 border-transparent group-hover:border-yellow-400 transition-colors shadow-md" 
                       />
                       <div className="flex flex-col">
-                        <span className="text-xs font-bold text-gray-200 group-hover:text-white line-clamp-1">{actor.name}</span>
-                        <span className="text-[10px] text-gray-500 line-clamp-1">{actor.character}</span>
+                        <span className="text-sm font-bold text-gray-200 group-hover:text-yellow-400 transition-colors">{actor.name}</span>
+                        <span className="text-xs text-gray-500">{actor.character}</span>
                       </div>
                     </div>
                   ))}
@@ -84,6 +89,28 @@ export default function MovieDetails() {
               </span>
               <span>{movie.first_air_date ? new Date(movie.first_air_date).getFullYear() : "N/A"}</span>
             </div>
+
+            {/* NOVA SEÇÃO: ONDE ASSISTIR */}
+            {streamingPlatforms.length > 0 && (
+              <div className="mb-8">
+                <span className="text-xs font-bold text-gray-400 uppercase tracking-widest block mb-3">Disponível em:</span>
+                <div className="flex flex-wrap gap-3">
+                  {streamingPlatforms.map((provider) => (
+                    <div key={provider.provider_id} className="relative group cursor-pointer" title={provider.provider_name}>
+                      <img 
+                        src={`https://image.tmdb.org/t/p/original${provider.logo_path}`} 
+                        alt={provider.provider_name} 
+                        className="w-12 h-12 rounded-xl shadow-lg border-2 border-transparent group-hover:border-yellow-400 group-hover:scale-110 transition-all duration-300"
+                      />
+                      {/* Tooltip com o nome da plataforma */}
+                      <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 bg-slate-800 text-xs font-bold px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50 shadow-xl">
+                        {provider.provider_name}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <h3 className="text-xl font-bold mb-3 text-gray-100 border-l-4 border-yellow-400 pl-3">Sinopse</h3>
             <p className="text-gray-300 leading-relaxed text-lg mb-10 max-w-4xl">
