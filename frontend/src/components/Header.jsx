@@ -1,125 +1,270 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { searchSeries } from '../services/api';
+import React, { useState, useEffect } from 'react';
+import { Link, useLocation } from 'react-router-dom';
+import {
+  Search,
+  Menu,
+  X,
+  ArrowRight,
+  Dices,
+  Flame,
+  Rocket,
+  VenetianMask,
+  Laugh,
+  Eye,
+  Skull,
+  Sparkles,
+  Heart,
+} from 'lucide-react';
+import { getFavorites } from '../utils/storage';
 
-export default function Header() {
-  const [query, setQuery] = useState('');
-  const [results, setResults] = useState([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const searchRef = useRef(null);
-  const navigate = useNavigate();
+const MENU_GENRES = [
+  { id: 28, name: 'Ação', icon: Flame },
+  { id: 878, name: 'Ficção', icon: Rocket },
+  { id: 18, name: 'Drama', icon: VenetianMask },
+  { id: 35, name: 'Comédia', icon: Laugh },
+  { id: 53, name: 'Suspense', icon: Eye },
+  { id: 27, name: 'Terror', icon: Skull },
+  { id: 16, name: 'Animação', icon: Sparkles },
+  { id: 10749, name: 'Romance', icon: Heart },
+];
 
-  // Efeito de Debounce (Atraso inteligente)
+export default function Header({ onOpenSurprise, onOpenSearch }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [playerOpen, setPlayerOpen] = useState(false);
+  const [favCount, setFavCount] = useState(0);
+  const [scrolled, setScrolled] = useState(false);
+  const location = useLocation();
+
   useEffect(() => {
-    // Se a barra estiver vazia, limpa os resultados
-    if (query.trim() === '') {
-      setResults([]);
-      return;
-    }
-
-    // Só chama a API 500 milissegundos DEPOIS que o usuário parar de digitar
-    const delayDebounceFn = setTimeout(async () => {
-      setIsSearching(true);
-      const data = await searchSeries(query);
-      // Pega apenas os 5 primeiros resultados para não criar um menu gigante
-      setResults(data.slice(0, 5));
-      setIsSearching(false);
-    }, 500);
-
-    // Se ele voltar a digitar antes de 500ms, cancela o timer anterior
-    return () => clearTimeout(delayDebounceFn);
-  }, [query]);
-
-  // Fecha o menu de busca se clicar fora dele
-  useEffect(() => {
-    function handleClickOutside(event) {
-      if (searchRef.current && !searchRef.current.contains(event.target)) {
-        setQuery(''); // Limpa a busca ao clicar fora, fechando o menu
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    const onPlayerToggle = (e) => {
+      const open = Boolean(e.detail?.open);
+      setPlayerOpen(open);
+      if (open) setMenuOpen(false);
+    };
+    window.addEventListener('studio:player-open', onPlayerToggle);
+    return () => window.removeEventListener('studio:player-open', onPlayerToggle);
   }, []);
 
-  // Quando clica em um resultado, limpa a barra e vai para a página da série
-  const handleSelectResult = (id) => {
-    setQuery('');
-    setResults([]);
-    navigate(`/series/${id}`);
-  };
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 36);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  useEffect(() => {
+    const syncFavs = () => setFavCount(getFavorites().length);
+    syncFavs();
+    window.addEventListener('bhflix:favorites-updated', syncFavs);
+    window.addEventListener('storage', syncFavs);
+    return () => {
+      window.removeEventListener('bhflix:favorites-updated', syncFavs);
+      window.removeEventListener('storage', syncFavs);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') setMenuOpen(false);
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [menuOpen]);
+
+  const closeMenu = () => setMenuOpen(false);
 
   return (
-    <header className="fixed top-0 w-full z-50 bg-slate-950/80 backdrop-blur-md border-b border-white/10 shadow-lg">
-      <div className="container mx-auto px-4 h-20 flex items-center justify-between gap-4">
-        
-        {/* LOGO E MENU ESQUERDA */}
-        <div className="flex items-center gap-8">
-          <Link to="/" className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-yellow-200">
-            BHFlix
-          </Link>
-          <nav className="hidden md:flex items-center gap-6 font-bold text-sm">
-            <Link to="/" className="text-gray-300 hover:text-yellow-400 transition-colors">Início</Link>
-            <Link to="/explorar" className="text-gray-300 hover:text-yellow-400 transition-colors">Explorar</Link>
-            <Link to="/minha-lista" className="text-gray-300 hover:text-yellow-400 transition-colors">Minha Lista</Link>
-          </nav>
-        </div>
-
-        {/* BARRA DE PESQUISA (LIVE SEARCH) */}
-        <div className="relative flex-1 max-w-sm" ref={searchRef}>
-          <div className="relative group">
-            <i className="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-yellow-400 transition-colors z-10"></i>
-            <input 
-              type="text" 
-              placeholder="Buscar séries..."
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              className="w-full bg-slate-900 border border-white/10 text-white placeholder-gray-500 rounded-full pl-11 pr-4 py-2.5 focus:outline-none focus:border-yellow-400 focus:ring-1 focus:ring-yellow-400 transition-all shadow-inner relative z-10"
+    <>
+      {/* ================================================================ */}
+      {/* TOP BAR ULTRA-LIMPA (ESTILO MON)                                 */}
+      {/* ================================================================ */}
+      <header
+        className={`fixed top-0 inset-x-0 z-50 transition-all duration-300 ${
+          playerOpen
+            ? 'opacity-0 pointer-events-none'
+            : scrolled || menuOpen
+              ? 'bg-[#09090B]/88 backdrop-blur-2xl border-b border-white/[0.07]'
+              : 'bg-gradient-to-b from-black/55 via-black/20 to-transparent'
+        }`}
+      >
+        <div className="container mx-auto px-5 sm:px-8 lg:px-14 h-20 flex items-center justify-between gap-4">
+          {/* Esquerda: Logo studio transparente */}
+          <Link
+            to="/"
+            onClick={closeMenu}
+            className="inline-flex items-center hover:opacity-85 transition-opacity"
+            aria-label="studio — Início"
+          >
+            <img
+              src="/logo-studio.png"
+              alt="studio"
+              className="h-6 sm:h-7 w-auto object-contain select-none drop-shadow-[0_2px_10px_rgba(0,0,0,0.45)]"
             />
-            
-            {/* Ícone de Carregando dentro do Input */}
-            {isSearching && (
-              <i className="fas fa-circle-notch fa-spin absolute right-4 top-1/2 -translate-y-1/2 text-yellow-400 z-10"></i>
-            )}
+          </Link>
+
+          {/* Direita: Busca translúcida discreta + Botão quadrado branco Menu */}
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                closeMenu();
+                onOpenSearch?.();
+              }}
+              aria-label="Buscar filmes e séries"
+              className="group flex items-center gap-2.5 h-10 px-3.5 sm:w-52 rounded-xl bg-white/[0.09] hover:bg-white/[0.15] backdrop-blur-xl border border-white/[0.14] text-xs text-white/65 hover:text-white transition-all"
+            >
+              <Search className="w-4 h-4 text-white/70 flex-shrink-0" />
+              <span className="hidden sm:inline flex-1 text-left">Buscar</span>
+              <kbd className="hidden md:inline text-[10px] px-1.5 py-0.5 rounded bg-black/30 text-white/45">
+                /
+              </kbd>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setMenuOpen((v) => !v)}
+              aria-label={menuOpen ? 'Fechar menu' : 'Abrir menu'}
+              aria-expanded={menuOpen}
+              className="w-10 h-10 rounded-xl bg-white hover:bg-white/90 text-[#09090B] flex items-center justify-center shadow-lg shadow-black/30 transition-transform active:scale-95"
+            >
+              {menuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </button>
           </div>
-
-          {/* MENU FLUTUANTE DE RESULTADOS */}
-          {query.length > 0 && results.length > 0 && (
-            <div className="absolute top-full left-0 right-0 mt-2 bg-slate-800 border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-50 animate-fade-in">
-              {results.map((series) => (
-                <button
-                  key={series.id}
-                  onClick={() => handleSelectResult(series.id)}
-                  className="w-full text-left flex items-center gap-3 p-3 hover:bg-slate-700 transition-colors border-b border-white/5 last:border-0 group"
-                >
-                  <img 
-                    src={series.poster_path ? `https://image.tmdb.org/t/p/w92${series.poster_path}` : "https://via.placeholder.com/92x138"} 
-                    alt={series.name}
-                    className="w-10 h-14 object-cover rounded-md shadow-sm"
-                  />
-                  <div className="flex-1 overflow-hidden">
-                    <h4 className="text-sm font-bold text-white group-hover:text-yellow-400 truncate">{series.name}</h4>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="text-xs text-gray-400">{series.first_air_date ? new Date(series.first_air_date).getFullYear() : ""}</span>
-                      <span className="text-[10px] text-yellow-400 bg-yellow-400/10 px-1.5 py-0.5 rounded font-bold">
-                        <i className="fas fa-star mr-1"></i>
-                        {series.vote_average ? series.vote_average.toFixed(1) : "N/A"}
-                      </span>
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* MENSAGEM: NENHUM RESULTADO */}
-          {query.length > 0 && results.length === 0 && !isSearching && (
-            <div className="absolute top-full left-0 right-0 mt-2 bg-slate-800 border border-white/10 rounded-2xl shadow-2xl p-4 z-50 animate-fade-in text-center text-sm text-gray-400">
-              Nenhuma série encontrada para "{query}"
-            </div>
-          )}
         </div>
+      </header>
 
-      </div>
-    </header>
+      {/* ================================================================ */}
+      {/* MENU OVERLAY EDITORIAL (ESTILO MON 00:19–00:21)                  */}
+      {/* ================================================================ */}
+      {menuOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/65 backdrop-blur-md pt-20 animate-fade-in"
+          onClick={closeMenu}
+        >
+          <div
+            className="bg-[#0B0B0E]/98 border-b border-white/[0.09] shadow-[0_30px_80px_rgba(0,0,0,0.9)] animate-mon-menu"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="container mx-auto px-5 sm:px-8 lg:px-14 py-9 sm:py-12 space-y-10">
+              {/* Linha principal: Tipografia editorial grande + coluna secundária */}
+              <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-8">
+                <nav className="flex flex-wrap items-center gap-x-9 gap-y-4">
+                  {[
+                    { label: 'Início', to: '/' },
+                    { label: 'Em Alta', to: '/explorar?tipo=movie' },
+                    {
+                      label: 'Melhores Avaliados',
+                      to: '/explorar?tipo=movie&sort=vote_average.desc',
+                    },
+                    { label: 'Populares', to: '/explorar?tipo=tv' },
+                  ].map((item) => {
+                    const active =
+                      item.to === '/' && location.pathname === '/';
+                    return (
+                      <Link
+                        key={item.label}
+                        to={item.to}
+                        onClick={closeMenu}
+                        className={`text-2xl sm:text-4xl font-light tracking-tight transition-colors ${
+                          active
+                            ? 'text-white'
+                            : 'text-white/75 hover:text-white'
+                        }`}
+                      >
+                        {item.label}
+                      </Link>
+                    );
+                  })}
+                </nav>
+
+                <div className="flex flex-wrap lg:flex-col gap-x-6 gap-y-2.5 lg:min-w-[190px] text-sm">
+                  <Link
+                    to="/explorar?tipo=movie"
+                    onClick={closeMenu}
+                    className="text-white/60 hover:text-white transition-colors"
+                  >
+                    Filmes
+                  </Link>
+                  <Link
+                    to="/explorar?tipo=tv"
+                    onClick={closeMenu}
+                    className="text-white/60 hover:text-white transition-colors"
+                  >
+                    Séries
+                  </Link>
+                  <Link
+                    to="/explorar"
+                    onClick={closeMenu}
+                    className="text-white/60 hover:text-white transition-colors"
+                  >
+                    Onde Assistir (BR)
+                  </Link>
+                  <Link
+                    to="/minha-lista"
+                    onClick={closeMenu}
+                    className="text-white/60 hover:text-white transition-colors inline-flex items-center gap-2"
+                  >
+                    Minha Lista
+                    {favCount > 0 && (
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white text-[#09090B]">
+                        {favCount}
+                      </span>
+                    )}
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      closeMenu();
+                      onOpenSurprise?.();
+                    }}
+                    className="text-white/80 hover:text-white transition-colors inline-flex items-center gap-1.5 text-left font-medium"
+                  >
+                    <Dices className="w-4 h-4 text-amber-400" />
+                    Surpreenda-me
+                  </button>
+                </div>
+              </div>
+
+              {/* Faixa inferior de Gêneros (como no vídeo 00:19) */}
+              <div className="pt-6 border-t border-white/[0.07]">
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-xs font-medium uppercase tracking-widest text-white/45">
+                    Gêneros de Filmes
+                  </span>
+                  <Link
+                    to="/explorar?tipo=movie"
+                    onClick={closeMenu}
+                    className="text-xs font-medium text-white/60 hover:text-white inline-flex items-center gap-1 transition-colors"
+                  >
+                    Explorar tudo
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </Link>
+                </div>
+
+                <div className="flex overflow-x-auto gap-3 pb-1 hide-scrollbar">
+                  {MENU_GENRES.map((g) => {
+                    const Icon = g.icon;
+                    return (
+                      <Link
+                        key={g.id}
+                        to={`/explorar?tipo=movie&genero=${g.id}`}
+                        onClick={closeMenu}
+                        className="group relative flex-shrink-0 w-36 sm:w-44 h-20 rounded-xl overflow-hidden bg-[#121216] hover:bg-white/[0.08] border border-white/[0.09] hover:border-white/30 p-3.5 flex flex-col justify-between transition-all"
+                      >
+                        <Icon className="w-4 h-4 text-white/45 group-hover:text-white transition-colors" />
+                        <span className="relative z-10 text-sm font-medium text-white/90 group-hover:text-white">
+                          {g.name}
+                        </span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

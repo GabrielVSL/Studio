@@ -1,50 +1,48 @@
-# **Portal de Séries 🎥**
+# studio
 
-Este é um portal dinâmico de séries de TV, desenvolvido como parte de um trabalho acadêmico. O projeto utiliza a API **The Movie DB** e um **JSON Server** como backend para armazenar dados personalizados.
-
----
-
-## **📋 Funcionalidades**
-
-### **Tela 1: Home Page (index.html)**
-- **Seção 1: Carrossel de Séries Populares**  
-  Mostra as séries mais populares obtidas da API The Movie DB.  
-  - Navegação entre as séries (próxima/anterior).  
-  - Clique em uma série para acessar a página de detalhes.  
-
-- **Seção 2: Cards de Séries Novas**  
-  Apresenta séries recentes com imagem, nome e descrição.  
-
-- **Seção 3: Informações do Autor**  
-  Mostra informações sobre o desenvolvedor do projeto, obtidas do JSON Server.  
-
-- **Seção 4: Séries Favoritas**  
-  Lista as séries marcadas como favoritas pelo usuário, armazenadas no JSON Server.
-
-### **Tela 2: Explorador (explorer.html)**
-- Campo de busca para localizar séries específicas.  
-- Lista de resultados exibida em cards.  
-- Clique em uma série para acessar a página de detalhes.
-
-### **Tela 3: Detalhes da Série (detalhes.html)**
-- **Seção 1: Visão Geral**  
-  Informações detalhadas da série, incluindo sinopse, data de lançamento, e mais.  
-  - Botão para marcar/desmarcar a série como favorita.  
-
-- **Seção 2: Elenco**  
-  Apresentação dos principais atores da série em formato de cards.
+Plataforma editorial de descoberta de **filmes, séries, trailers oficiais e streamings no Brasil**, alimentada pelas APIs do **TMDB** e **Watchmode** e hospedada na **Vercel** (`https://studiofilm.vercel.app`).
 
 ---
 
-## **🛠️ Tecnologias Utilizadas**
+## ✨ Funcionalidades
 
-- **Frontend:**  
-  - HTML5, CSS3, JavaScript  
-  - Bootstrap (para componentes responsivos e design)  
+- **Hero Cinematográfica & Player Customizado:** Transição coreografada em 2 tempos com player de trailer em fonte única de verdade (`youtube-nocookie.com` + API `YT.Player`), tela cheia fluida e legendas sincronizadas com as faixas reais do vídeo.
+- **Vitrine Viva na Home:** Galeria sanfona 3D de categorias com GSAP, curadoria renovada sem duplicar títulos da Hero, `TOP 10 Filmes` e `TOP 10 Séries` com arrasto lateral, *Aclamados pela Crítica*, *Estrelas em Destaque* e avaliação rápida interativa.
+- **Explorar com Multi-Seleção:** Dock de streamings no Brasil (selecione vários ao mesmo tempo), gêneros em grade multi-seleção, filtros de período/ano exato, nota mínima e ordenação.
+- **Links Diretos de Streaming (BR):** Integração com a **Watchmode API** (com cache 24h) para abrir títulos direto na Netflix, Prime Video, Max, Disney+, Apple TV+, Globoplay, Paramount+ e Crunchyroll, destacando ofertas gratuitas.
+- **Busca Spotlight (`Ctrl+K` / `/`), Roleta "Surpreenda-me" e Minha Lista** persistida localmente.
 
-- **Backend:**  
-  - JSON Server (para armazenar dados de séries favoritas e do autor)
+---
 
-- **API Externa:**  
-  - [The Movie DB API](https://developers.themoviedb.org/3)
+## 🛡️ Segurança & Hardening
 
+- **Chaves 100% Server-Side (`frontend/api/index.js`):** `API_KEY` e `WATCHMODE_API_KEY` nunca vão para o bundle do navegador.
+- **Proteção contra Ataques na API:**
+  - Validação estrita por regex em todos os parâmetros (anti-SSRF e anti-path traversal).
+  - Proteção contra HTTP Parameter Pollution (HPP), bloqueio de URLs gigantes e métodos de escrita (`GET`/`HEAD`/`OPTIONS` apenas).
+  - CORS restritivo (libera `localhost` somente fora da Vercel) + rate limiting por IP real com limite rígido de memória (anti-DoS) e cota dedicada para proteger o plano da Watchmode.
+  - Validação defensiva de URLs externas (bloqueio de credenciais embutidas, IPs privados/localhost e portas fora do padrão) + handler global de erro sem vazamento de stack trace.
+- **Headers HTTP & Edge (`frontend/vercel.json`):** `Content-Security-Policy`, `Strict-Transport-Security`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Cross-Origin-Opener-Policy`, `Referrer-Policy` e `Permissions-Policy`.
+
+---
+
+## 🚀 Rodando Localmente
+
+1. Copie `frontend/.env.example` para `frontend/.env` e preencha sua `API_KEY` do TMDB (e opcionalmente `WATCHMODE_API_KEY`).
+2. Rode com um único comando — o Vite sobe o frontend e monta a API local automaticamente em `/api/*`:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+*(Se rodar sem `API_KEY` no `.env`, o Vite faz proxy automático de `/api` para `https://studiofilm.vercel.app/api`.)*
+
+---
+
+## 🛠️ Stack
+
+- **Frontend:** React 19, Vite, Tailwind CSS v4, GSAP, React Router, Lucide React
+- **API Serverless:** Node.js, Express 5, Axios (Vercel Functions)
+- **Dados:** [The Movie Database (TMDB)](https://www.themoviedb.org/) & [Watchmode](https://api.watchmode.com/)

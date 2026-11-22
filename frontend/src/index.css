@@ -1,5 +1,33 @@
 @import "tailwindcss";
 
+:root {
+  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --font-display: 'Outfit', 'Plus Jakarta Sans', system-ui, sans-serif;
+}
+
+@layer base {
+  body {
+    font-family: var(--font-sans);
+    background-color: #09090B;
+    color: #ffffff;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+  }
+}
+
+/* Tipografia geométrica display inspirada na Sifonn da marca studio */
+.font-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+}
+
+/* Esconde barra de rolagem em carrosséis horizontais */
 .hide-scrollbar::-webkit-scrollbar {
   display: none;
 }
@@ -8,24 +36,195 @@
   scrollbar-width: none;
 }
 
-/* Esconde a barra nativa em carrosséis horizontais */
-.hide-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-.hide-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-
-/* Estiliza a barra de rolagem vertical (para o Elenco) */
+/* Scrollbar vertical minimalista */
 .custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
+  width: 5px;
 }
 .custom-scrollbar::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.03);
   border-radius: 8px;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #facc15; /* Amarelo Tailwind */
+  background: rgba(255, 255, 255, 0.18);
   border-radius: 8px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.35);
+}
+
+/* Shimmer suave para Skeletons */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.04) 25%,
+    rgba(255, 255, 255, 0.09) 50%,
+    rgba(255, 255, 255, 0.04) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s infinite linear;
+}
+
+/* ================================================================ */
+/* ANIMAÇÕES COREOGRAFADAS EM 2 TEMPOS (INSPIRAÇÃO MON / DRIBBBLE)  */
+/* ================================================================ */
+
+/* Tempo 1: Cortina lateral suave revelando o novo backdrop da direita -> esquerda */
+@keyframes monBackdropWipe {
+  0% {
+    clip-path: inset(0 0 0 100%);
+    transform: scale(1.05);
+  }
+  100% {
+    clip-path: inset(0 0 0 0);
+    transform: scale(1);
+  }
+}
+
+/* Tempo 2: Revelação cadenciada dos textos (~220ms após a cortina iniciar) */
+@keyframes monTextReveal {
+  0% {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Cross-zoom suave no mini-card flutuante do Trailer */
+@keyframes monTrailerSwap {
+  0% {
+    opacity: 0.25;
+    transform: scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Drawer editorial descendo suavemente do topo */
+@keyframes monMenuDrop {
+  0% {
+    opacity: 0;
+    transform: translateY(-14px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Transição fluida de entrada/saída dos Detalhes (sobe da base ao entrar, desce ao sair) */
+@keyframes sheetSlideUp {
+  0% {
+    opacity: 0;
+    transform: translateY(52px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes sheetSlideDown {
+  0% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(56px);
+  }
+}
+
+.animate-sheet-in {
+  animation: sheetSlideUp 0.52s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+.animate-sheet-in-delayed {
+  animation: sheetSlideUp 0.58s cubic-bezier(0.22, 1, 0.36, 1) 90ms backwards;
+}
+
+.animate-sheet-out {
+  animation: sheetSlideDown 0.3s cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+.animate-mon-backdrop {
+  animation: monBackdropWipe 0.9s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.animate-mon-text-1 {
+  animation: monTextReveal 0.55s cubic-bezier(0.22, 1, 0.36, 1) 160ms both;
+}
+.animate-mon-text-2 {
+  animation: monTextReveal 0.6s cubic-bezier(0.22, 1, 0.36, 1) 230ms both;
+}
+.animate-mon-text-3 {
+  animation: monTextReveal 0.6s cubic-bezier(0.22, 1, 0.36, 1) 300ms both;
+}
+.animate-mon-text-4 {
+  animation: monTextReveal 0.65s cubic-bezier(0.22, 1, 0.36, 1) 360ms both;
+}
+
+.animate-mon-trailer {
+  animation: monTrailerSwap 0.65s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+.animate-mon-menu {
+  animation: monMenuDrop 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Animações sutis de Modais e Toasts */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes slideUpToast {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.22s ease-out forwards;
+}
+
+.animate-scale-in {
+  animation: scaleIn 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-toast {
+  animation: slideUpToast 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
