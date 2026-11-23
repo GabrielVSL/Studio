@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
   Film,
   Tv,
+  LayoutGrid,
   ChevronDown,
   RotateCcw,
-  Plus,
   Loader2,
   Ticket,
   X,
@@ -14,6 +14,7 @@ import {
   Calendar,
   Tags,
   ArrowUpDown,
+  Sparkles,
 } from 'lucide-react';
 import MovieCard from './MovieCard';
 import { CardGridSkeleton } from './Skeletons';
@@ -61,24 +62,73 @@ const parseIdList = (raw) => {
 };
 
 const CURRENT_YEAR = new Date().getFullYear();
+const YEAR_MIN = 1950;
+const YEAR_MAX = CURRENT_YEAR;
+const RATING_MAX = 9.5;
 
-const YEAR_PRESETS = [
-  { id: 'all', label: 'Qualquer ano', year: '', yearFrom: '', yearTo: '' },
-  { id: String(CURRENT_YEAR), label: String(CURRENT_YEAR), year: String(CURRENT_YEAR), yearFrom: '', yearTo: '' },
-  { id: String(CURRENT_YEAR - 1), label: String(CURRENT_YEAR - 1), year: String(CURRENT_YEAR - 1), yearFrom: '', yearTo: '' },
-  { id: String(CURRENT_YEAR - 2), label: String(CURRENT_YEAR - 2), year: String(CURRENT_YEAR - 2), yearFrom: '', yearTo: '' },
-  { id: '2020s', label: 'Anos 2020', year: '', yearFrom: '2020', yearTo: String(CURRENT_YEAR) },
-  { id: '2010s', label: 'Anos 2010', year: '', yearFrom: '2010', yearTo: '2019' },
-  { id: '2000s', label: 'Anos 2000', year: '', yearFrom: '2000', yearTo: '2009' },
-  { id: 'classics', label: 'Clássicos (< 2000)', year: '', yearFrom: '1950', yearTo: '1999' },
+const clampYear = (val, fallback) => {
+  const n = Number(val);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(YEAR_MAX, Math.max(YEAR_MIN, Math.round(n)));
+};
+
+const clampRating = (val) => {
+  const n = Number(val);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.min(RATING_MAX, Math.round(n * 2) / 2);
+};
+
+const parseInitialYears = (searchParams) => {
+  const exact = searchParams.get('ano');
+  if (exact && /^\d{4}$/.test(exact)) {
+    const y = clampYear(exact, YEAR_MAX);
+    return [y, y];
+  }
+
+  const de = searchParams.get('de');
+  const ate = searchParams.get('ate');
+  if (de || ate) {
+    const from = de ? clampYear(de, YEAR_MIN) : YEAR_MIN;
+    const to = ate ? clampYear(ate, YEAR_MAX) : YEAR_MAX;
+    return [Math.min(from, to), Math.max(from, to)];
+  }
+
+  // Compatibilidade com links antigos usando ?periodo=...
+  const periodo = searchParams.get('periodo');
+  if (periodo === '2020s') return [2020, YEAR_MAX];
+  if (periodo === '2010s') return [2010, 2019];
+  if (periodo === '2000s') return [2000, 2009];
+  if (periodo === 'classics') return [YEAR_MIN, 1999];
+  if (periodo && /^\d{4}$/.test(periodo)) {
+    const y = clampYear(periodo, YEAR_MAX);
+    return [y, y];
+  }
+
+  return [YEAR_MIN, YEAR_MAX];
+};
+
+const YEAR_QUICK_PRESETS = [
+  { id: 'recent', label: 'Últimos 3 anos', from: CURRENT_YEAR - 2, to: YEAR_MAX },
+  { id: '2020s', label: 'Anos 2020', from: 2020, to: YEAR_MAX },
+  { id: '2010s', label: 'Anos 2010', from: 2010, to: 2019 },
+  { id: 'classics', label: 'Clássicos (< 2000)', from: YEAR_MIN, to: 1999 },
 ];
 
-const RATING_OPTIONS = [
-  { value: 0, label: 'Qualquer nota', desc: 'Sem filtro mínimo' },
-  { value: 6, label: '6.0+', desc: 'Bem avaliados' },
-  { value: 7, label: '7.0+', desc: 'Muito bons' },
-  { value: 8, label: '8.0+', desc: 'Aclamados' },
+const RATING_QUICK_PRESETS = [
+  { value: 0, label: 'Todas' },
+  { value: 6, label: '6.0+' },
+  { value: 7, label: '7.0+' },
+  { value: 8, label: '8.0+' },
 ];
+
+const getRatingDescriptor = (val) => {
+  if (val <= 0) return 'Sem filtro mínimo';
+  if (val < 6) return 'Acima da média';
+  if (val < 7) return 'Bem avaliados';
+  if (val < 8) return 'Muito bons';
+  if (val < 8.5) return 'Aclamados pela crítica';
+  return 'Obras-primas';
+};
 
 const normalizeProviderLabel = (name = '') =>
   name
@@ -86,18 +136,24 @@ const normalizeProviderLabel = (name = '') =>
     .replace(/^Amazon Video$/i, 'Prime Video')
     .replace(/^HBO Max$/i, 'Max');
 
+const parseMediaType = (raw) => {
+  if (raw === 'movie') return 'movie';
+  if (raw === 'tv') return 'tv';
+  return 'all';
+};
+
 export default function Explorer() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
   const query = searchParams.get('q') || '';
-  const initialType = searchParams.get('tipo') === 'tv' ? 'tv' : 'movie';
+  const initialType = parseMediaType(searchParams.get('tipo'));
   const initialGenres = parseIdList(searchParams.get('genero'));
   const initialProviders = parseIdList(searchParams.get('streaming'));
   const initialSort = searchParams.get('sort') || 'popularity.desc';
-  const initialYear = searchParams.get('ano') || '';
-  const initialPeriod = searchParams.get('periodo') || (initialYear ? 'custom' : 'all');
-  const initialRating = Number(searchParams.get('nota')) || 0;
+  const [initYFrom, initYTo] = parseInitialYears(searchParams);
+  const initialRating = clampRating(searchParams.get('nota'));
+  const initialFree = searchParams.get('gratis') === '1' || searchParams.get('gratis') === 'true';
 
   const [mediaType, setMediaType] = useState(initialType);
   const [genres, setGenres] = useState(() => explorerMetaCache.get(initialType)?.genres || []);
@@ -107,15 +163,23 @@ export default function Explorer() {
 
   const [selectedGenres, setSelectedGenres] = useState(initialGenres);
   const [selectedProviders, setSelectedProviders] = useState(initialProviders);
-  const [yearPresetId, setYearPresetId] = useState(initialPeriod);
-  const [customYear, setCustomYear] = useState(initialYear);
+  const [freeOnly, setFreeOnly] = useState(initialFree);
+
+  // Faixa efetiva de ano e nota (commitadas na query) + estados draft para sliders a 60fps
+  const [yearRange, setYearRange] = useState([initYFrom, initYTo]);
+  const [draftYearRange, setDraftYearRange] = useState([initYFrom, initYTo]);
   const [rating, setRating] = useState(initialRating);
+  const [draftRating, setDraftRating] = useState(initialRating);
   const [sort, setSort] = useState(initialSort);
 
   // Apenas um popover aberto por vez: 'genres' | 'year' | 'rating' | 'sort' | null
   const [openMenu, setOpenMenu] = useState(null);
   const toolbarRef = useRef(null);
   const requestSeqRef = useRef(0);
+  const yearDebounceRef = useRef(null);
+  const ratingDebounceRef = useRef(null);
+  const loadMoreSentinelRef = useRef(null);
+  const loadingMoreRef = useRef(false);
 
   // Sincroniza quando o usuário navega para /explorar com novos query params (ex: clicar em categoria na Home)
   const searchString = searchParams.toString();
@@ -123,43 +187,38 @@ export default function Explorer() {
   if (searchString !== prevSearchString) {
     setPrevSearchString(searchString);
     const paramTipo = searchParams.get('tipo');
-    if (paramTipo === 'movie' || paramTipo === 'tv') {
+    if (paramTipo === 'movie' || paramTipo === 'tv' || paramTipo === 'all') {
       setMediaType(paramTipo);
     }
     setSelectedGenres(parseIdList(searchParams.get('genero')));
     setSelectedProviders(parseIdList(searchParams.get('streaming')));
+    setFreeOnly(searchParams.get('gratis') === '1' || searchParams.get('gratis') === 'true');
     const pSort = searchParams.get('sort');
     setSort(pSort || 'popularity.desc');
-    const pYear = searchParams.get('ano') || '';
-    const pPeriod = searchParams.get('periodo') || (pYear ? 'custom' : 'all');
-    setCustomYear(pYear);
-    setYearPresetId(pPeriod);
-    setRating(Number(searchParams.get('nota')) || 0);
+    const [pFrom, pTo] = parseInitialYears(searchParams);
+    setYearRange([pFrom, pTo]);
+    setDraftYearRange([pFrom, pTo]);
+    const pRating = clampRating(searchParams.get('nota'));
+    setRating(pRating);
+    setDraftRating(pRating);
   }
 
-  // Resolve parâmetros efetivos de ano / faixa
-  const resolvedYearFilter = useMemo(() => {
-    if (yearPresetId === 'custom') {
-      return {
-        year: /^\d{4}$/.test(customYear) ? customYear : '',
-        yearFrom: '',
-        yearTo: '',
-        label: /^\d{4}$/.test(customYear) ? customYear : 'Ano',
-      };
-    }
-    const preset = YEAR_PRESETS.find((p) => p.id === yearPresetId) || YEAR_PRESETS[0];
-    return {
-      year: preset.year,
-      yearFrom: preset.yearFrom,
-      yearTo: preset.yearTo,
-      label: preset.id === 'all' ? 'Ano' : preset.label,
-    };
-  }, [yearPresetId, customYear]);
+  const [yearFrom, yearTo] = yearRange;
+  const hasYearFilter = yearFrom > YEAR_MIN || yearTo < YEAR_MAX;
+  const effectiveYear = hasYearFilter && yearFrom === yearTo ? String(yearFrom) : '';
+  const effectiveYearFrom = hasYearFilter && yearFrom !== yearTo && yearFrom > YEAR_MIN ? String(yearFrom) : '';
+  const effectiveYearTo = hasYearFilter && yearFrom !== yearTo && yearTo < YEAR_MAX ? String(yearTo) : '';
+
+  const yearLabel = !hasYearFilter
+    ? 'Ano'
+    : yearFrom === yearTo
+      ? String(yearFrom)
+      : `${yearFrom}–${yearTo}`;
 
   const genresKey = [...selectedGenres].sort((a, b) => a - b).join(',');
   const providersKey = [...selectedProviders].sort((a, b) => a - b).join('|');
 
-  const cacheKey = `${query}|${mediaType}|${genresKey}|${providersKey}|${resolvedYearFilter.year}|${resolvedYearFilter.yearFrom}|${resolvedYearFilter.yearTo}|${rating}|${sort}`;
+  const cacheKey = `${query}|${mediaType}|${genresKey}|${providersKey}|${freeOnly ? '1' : '0'}|${effectiveYear}|${effectiveYearFrom}|${effectiveYearTo}|${rating}|${sort}`;
 
   const [results, setResults] = useState(() => getFreshExplorerCache(cacheKey)?.results || []);
   const [totalResults, setTotalResults] = useState(
@@ -177,7 +236,7 @@ export default function Explorer() {
       { value: 'popularity.desc', label: 'Mais Populares' },
       { value: 'vote_average.desc', label: 'Melhores Avaliados' },
       {
-        value: mediaType === 'movie' ? 'primary_release_date.desc' : 'first_air_date.desc',
+        value: mediaType === 'tv' ? 'first_air_date.desc' : 'primary_release_date.desc',
         label: 'Mais Recentes',
       },
     ],
@@ -185,34 +244,52 @@ export default function Explorer() {
   );
 
   // Atualiza a URL de forma limpa (replace: true para não poluir o botão Voltar)
-  const syncUrlParams = (overrides = {}) => {
-    if (query) return;
-    const next = {
-      tipo: overrides.mediaType ?? mediaType,
-      genres: overrides.selectedGenres ?? selectedGenres,
-      providers: overrides.selectedProviders ?? selectedProviders,
-      period: overrides.yearPresetId ?? yearPresetId,
-      customYear: overrides.customYear ?? customYear,
-      rating: overrides.rating ?? rating,
-      sort: overrides.sort ?? sort,
+  const syncUrlParams = useCallback(
+    (overrides = {}) => {
+      if (query) return;
+      const next = {
+        tipo: overrides.mediaType ?? mediaType,
+        genres: overrides.selectedGenres ?? selectedGenres,
+        providers: overrides.selectedProviders ?? selectedProviders,
+        freeOnly: overrides.freeOnly ?? freeOnly,
+        yearRange: overrides.yearRange ?? yearRange,
+        rating: overrides.rating ?? rating,
+        sort: overrides.sort ?? sort,
+      };
+
+      const params = new URLSearchParams();
+      params.set('tipo', next.tipo);
+      if (next.genres.length > 0) params.set('genero', next.genres.join(','));
+      if (next.providers.length > 0) params.set('streaming', next.providers.join('|'));
+      if (next.freeOnly) params.set('gratis', '1');
+
+      const [nFrom, nTo] = next.yearRange;
+      if (nFrom > YEAR_MIN || nTo < YEAR_MAX) {
+        if (nFrom === nTo) {
+          params.set('ano', String(nFrom));
+        } else {
+          if (nFrom > YEAR_MIN) params.set('de', String(nFrom));
+          if (nTo < YEAR_MAX) params.set('ate', String(nTo));
+        }
+      }
+
+      if (next.rating > 0) params.set('nota', String(next.rating));
+      if (next.sort && next.sort !== 'popularity.desc') params.set('sort', next.sort);
+
+      const nextStr = params.toString();
+      setPrevSearchString(nextStr);
+      setSearchParams(params, { replace: true });
+    },
+    [query, mediaType, selectedGenres, selectedProviders, freeOnly, yearRange, rating, sort, setSearchParams]
+  );
+
+  // Limpa timers de debounce na desmontagem
+  useEffect(() => {
+    return () => {
+      if (yearDebounceRef.current) clearTimeout(yearDebounceRef.current);
+      if (ratingDebounceRef.current) clearTimeout(ratingDebounceRef.current);
     };
-
-    const params = new URLSearchParams();
-    params.set('tipo', next.tipo);
-    if (next.genres.length > 0) params.set('genero', next.genres.join(','));
-    if (next.providers.length > 0) params.set('streaming', next.providers.join('|'));
-    if (next.period === 'custom' && /^\d{4}$/.test(next.customYear)) {
-      params.set('ano', next.customYear);
-    } else if (next.period && next.period !== 'all' && next.period !== 'custom') {
-      params.set('periodo', next.period);
-    }
-    if (next.rating > 0) params.set('nota', String(next.rating));
-    if (next.sort && next.sort !== 'popularity.desc') params.set('sort', next.sort);
-
-    const nextStr = params.toString();
-    setPrevSearchString(nextStr);
-    setSearchParams(params, { replace: true });
-  };
+  }, []);
 
   // Fecha popover ao clicar fora ou apertar ESC
   useEffect(() => {
@@ -232,7 +309,7 @@ export default function Explorer() {
     };
   }, []);
 
-  // Carrega gêneros e streamings disponíveis para Filmes ou Séries
+  // Carrega gêneros e streamings disponíveis para Todos / Filmes / Séries
   useEffect(() => {
     const cachedMeta = explorerMetaCache.get(mediaType);
     let cancelled = false;
@@ -244,7 +321,7 @@ export default function Explorer() {
       }
       const [gList, pList] = await Promise.all([
         getGenres(mediaType),
-        getStreamingProviders(mediaType),
+        getStreamingProviders(mediaType === 'tv' ? 'tv' : 'movie'),
       ]);
       if (!cancelled) {
         explorerMetaCache.set(mediaType, { genres: gList, providers: pList });
@@ -270,6 +347,7 @@ export default function Explorer() {
   // Busca real dos resultados sempre que qualquer filtro muda
   useEffect(() => {
     const reqId = ++requestSeqRef.current;
+    loadingMoreRef.current = false;
 
     const fetchInitialData = async () => {
       const cached = explorerResultsCache.get(cacheKey);
@@ -279,6 +357,7 @@ export default function Explorer() {
         setPage(cached.page);
         setHasMore(cached.hasMore);
         setLoading(false);
+        setLoadingMore(false);
         if (lastExplorerScroll.key === cacheKey && lastExplorerScroll.y > 0) {
           window.scrollTo(0, lastExplorerScroll.y);
         }
@@ -286,6 +365,7 @@ export default function Explorer() {
       }
 
       setLoading(true);
+      setLoadingMore(false);
       setPage(1);
 
       let items = [];
@@ -301,17 +381,18 @@ export default function Explorer() {
           type: mediaType,
           genre: genresKey || null,
           page: 1,
-          year: resolvedYearFilter.year,
-          yearFrom: resolvedYearFilter.yearFrom,
-          yearTo: resolvedYearFilter.yearTo,
+          year: effectiveYear,
+          yearFrom: effectiveYearFrom,
+          yearTo: effectiveYearTo,
           rating: rating > 0 ? rating : '',
           sort,
           provider: providersKey || null,
+          free: freeOnly,
           withMeta: true,
         });
         items = res.results;
         total = res.totalResults;
-        moreAvailable = res.totalPages > 1 && items.length >= 18;
+        moreAvailable = res.totalPages > 1 && items.length >= 16;
       }
 
       if (reqId !== requestSeqRef.current) return;
@@ -336,17 +417,98 @@ export default function Explorer() {
     mediaType,
     genresKey,
     providersKey,
-    resolvedYearFilter.year,
-    resolvedYearFilter.yearFrom,
-    resolvedYearFilter.yearTo,
+    freeOnly,
+    effectiveYear,
+    effectiveYearFrom,
+    effectiveYearTo,
     rating,
     sort,
   ]);
 
+  const loadNextPage = useCallback(async () => {
+    if (query || loading || !hasMore || loadingMoreRef.current) return;
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+
+    const reqId = requestSeqRef.current;
+    const nextPage = page + 1;
+
+    const res = await discoverMedia({
+      type: mediaType,
+      genre: genresKey || null,
+      page: nextPage,
+      year: effectiveYear,
+      yearFrom: effectiveYearFrom,
+      yearTo: effectiveYearTo,
+      rating: rating > 0 ? rating : '',
+      sort,
+      provider: providersKey || null,
+      free: freeOnly,
+      withMeta: true,
+    });
+
+    if (reqId !== requestSeqRef.current) {
+      loadingMoreRef.current = false;
+      return;
+    }
+
+    const existingKeys = new Set(results.map((r) => `${r.media_type}-${r.id}`));
+    const fresh = res.results.filter((r) => !existingKeys.has(`${r.media_type}-${r.id}`));
+    const merged = [...results, ...fresh];
+    const nextHasMore = nextPage < res.totalPages && res.results.length >= 16;
+
+    setExplorerCache(cacheKey, {
+      timestamp: Date.now(),
+      results: merged,
+      totalResults: res.totalResults,
+      page: nextPage,
+      hasMore: nextHasMore,
+    });
+    setResults(merged);
+    setPage(nextPage);
+    setHasMore(nextHasMore);
+    setLoadingMore(false);
+    loadingMoreRef.current = false;
+  }, [
+    query,
+    loading,
+    hasMore,
+    page,
+    mediaType,
+    genresKey,
+    effectiveYear,
+    effectiveYearFrom,
+    effectiveYearTo,
+    rating,
+    sort,
+    providersKey,
+    freeOnly,
+    results,
+    cacheKey,
+  ]);
+
+  // Infinite Scroll automático: antecipa o carregamento 500px antes do fim da lista
+  useEffect(() => {
+    const sentinel = loadMoreSentinelRef.current;
+    if (!sentinel || query || loading || !hasMore) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          loadNextPage();
+        }
+      },
+      { rootMargin: '500px 0px' }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [query, loading, hasMore, loadNextPage]);
+
   const handleSwitchType = (nextType) => {
     if (nextType === mediaType) return;
     let nextSort = sort;
-    if (sort === 'first_air_date.desc' && nextType === 'movie') {
+    if (sort === 'first_air_date.desc' && nextType !== 'tv') {
       nextSort = 'primary_release_date.desc';
     } else if (sort === 'primary_release_date.desc' && nextType === 'tv') {
       nextSort = 'first_air_date.desc';
@@ -371,6 +533,12 @@ export default function Explorer() {
     syncUrlParams({ selectedProviders: [] });
   };
 
+  const toggleFreeOnly = () => {
+    const next = !freeOnly;
+    setFreeOnly(next);
+    syncUrlParams({ freeOnly: next });
+  };
+
   const toggleGenre = (genreId) => {
     const next = selectedGenres.includes(genreId)
       ? selectedGenres.filter((id) => id !== genreId)
@@ -384,31 +552,60 @@ export default function Explorer() {
     syncUrlParams({ selectedGenres: [] });
   };
 
-  const handleSelectYearPreset = (presetId) => {
-    setYearPresetId(presetId);
-    setCustomYear('');
-    setOpenMenu(null);
-    syncUrlParams({ yearPresetId: presetId, customYear: '' });
+  // Commit do slider de ano (imediato ou debounced durante arrasto)
+  const commitYearRange = useCallback(
+    (nextRange) => {
+      if (yearDebounceRef.current) clearTimeout(yearDebounceRef.current);
+      setYearRange(nextRange);
+      syncUrlParams({ yearRange: nextRange });
+    },
+    [syncUrlParams]
+  );
+
+  const handleYearSliderChange = (index, rawVal) => {
+    const val = clampYear(rawVal, index === 0 ? YEAR_MIN : YEAR_MAX);
+    const nextRange =
+      index === 0
+        ? [Math.min(val, draftYearRange[1]), draftYearRange[1]]
+        : [draftYearRange[0], Math.max(val, draftYearRange[0])];
+
+    setDraftYearRange(nextRange);
+    if (yearDebounceRef.current) clearTimeout(yearDebounceRef.current);
+    yearDebounceRef.current = setTimeout(() => {
+      commitYearRange(nextRange);
+    }, 240);
   };
 
-  const handleCustomYearChange = (val) => {
-    const clean = val.replace(/\D/g, '').slice(0, 4);
-    setCustomYear(clean);
-    if (clean.length === 0) {
-      setYearPresetId('all');
-      syncUrlParams({ yearPresetId: 'all', customYear: '' });
-    } else {
-      setYearPresetId('custom');
-      if (clean.length === 4) {
-        syncUrlParams({ yearPresetId: 'custom', customYear: clean });
-      }
-    }
+  const applyYearPreset = (from, to) => {
+    const nextRange = [from, to];
+    setDraftYearRange(nextRange);
+    commitYearRange(nextRange);
   };
 
-  const handleSelectRating = (val) => {
-    setRating(val);
-    setOpenMenu(null);
-    syncUrlParams({ rating: val });
+  const resetYearFilter = () => {
+    const full = [YEAR_MIN, YEAR_MAX];
+    setDraftYearRange(full);
+    commitYearRange(full);
+  };
+
+  // Commit do slider de nota mínima
+  const commitRating = useCallback(
+    (nextVal) => {
+      if (ratingDebounceRef.current) clearTimeout(ratingDebounceRef.current);
+      const clean = clampRating(nextVal);
+      setRating(clean);
+      syncUrlParams({ rating: clean });
+    },
+    [syncUrlParams]
+  );
+
+  const handleRatingSliderChange = (rawVal) => {
+    const clean = clampRating(rawVal);
+    setDraftRating(clean);
+    if (ratingDebounceRef.current) clearTimeout(ratingDebounceRef.current);
+    ratingDebounceRef.current = setTimeout(() => {
+      commitRating(clean);
+    }, 220);
   };
 
   const handleSelectSort = (val) => {
@@ -418,69 +615,34 @@ export default function Explorer() {
   };
 
   const clearAllFilters = () => {
+    const fullYears = [YEAR_MIN, YEAR_MAX];
     setSelectedGenres([]);
     setSelectedProviders([]);
-    setYearPresetId('all');
-    setCustomYear('');
+    setFreeOnly(false);
+    setYearRange(fullYears);
+    setDraftYearRange(fullYears);
     setRating(0);
+    setDraftRating(0);
     setSort('popularity.desc');
     setOpenMenu(null);
     syncUrlParams({
       selectedGenres: [],
       selectedProviders: [],
-      yearPresetId: 'all',
-      customYear: '',
+      freeOnly: false,
+      yearRange: fullYears,
       rating: 0,
       sort: 'popularity.desc',
     });
-  };
-
-  const handleLoadMore = async () => {
-    if (query || loadingMore) return;
-    setLoadingMore(true);
-    const nextPage = page + 1;
-
-    const res = await discoverMedia({
-      type: mediaType,
-      genre: genresKey || null,
-      page: nextPage,
-      year: resolvedYearFilter.year,
-      yearFrom: resolvedYearFilter.yearFrom,
-      yearTo: resolvedYearFilter.yearTo,
-      rating: rating > 0 ? rating : '',
-      sort,
-      provider: providersKey || null,
-      withMeta: true,
-    });
-
-    const existingIds = new Set(results.map((r) => r.id));
-    const fresh = res.results.filter((r) => !existingIds.has(r.id));
-    const merged = [...results, ...fresh];
-    const nextHasMore = nextPage < res.totalPages && res.results.length >= 18;
-
-    setExplorerCache(cacheKey, {
-      timestamp: Date.now(),
-      results: merged,
-      totalResults: res.totalResults,
-      page: nextPage,
-      hasMore: nextHasMore,
-    });
-    setResults(merged);
-    setPage(nextPage);
-    setHasMore(nextHasMore);
-    setLoadingMore(false);
   };
 
   const activeProviderObjs = providers.filter((p) =>
     selectedProviders.includes(p.provider_id)
   );
   const activeGenreObjs = genres.filter((g) => selectedGenres.includes(g.id));
-  const hasYearFilter = Boolean(
-    resolvedYearFilter.year || resolvedYearFilter.yearFrom || resolvedYearFilter.yearTo
-  );
   const hasAnyFilter = Boolean(
     selectedProviders.length > 0 ||
       selectedGenres.length > 0 ||
+      freeOnly ||
       hasYearFilter ||
       rating > 0 ||
       sort !== 'popularity.desc'
@@ -495,6 +657,12 @@ export default function Explorer() {
       : activeGenreObjs.length === 1
         ? activeGenreObjs[0].name
         : `Gêneros (${activeGenreObjs.length})`;
+
+  // Percentuais para as barras preenchidas dos sliders
+  const yearSpan = YEAR_MAX - YEAR_MIN;
+  const yearLeftPct = ((draftYearRange[0] - YEAR_MIN) / yearSpan) * 100;
+  const yearRightPct = ((draftYearRange[1] - YEAR_MIN) / yearSpan) * 100;
+  const ratingPct = (draftRating / RATING_MAX) * 100;
 
   return (
     <main className="min-h-screen bg-[#09090B] pt-28 pb-20 px-5 sm:px-8 lg:px-14">
@@ -514,9 +682,11 @@ export default function Explorer() {
                   {totalResults.toLocaleString('pt-BR')}{' '}
                   {query
                     ? 'encontrados'
-                    : mediaType === 'movie'
-                      ? 'filmes'
-                      : 'séries'}
+                    : mediaType === 'all'
+                      ? 'títulos'
+                      : mediaType === 'movie'
+                        ? 'filmes'
+                        : 'séries'}
                 </span>
               )}
             </div>
@@ -531,12 +701,25 @@ export default function Explorer() {
             )}
           </div>
 
+          {/* SELETOR UNIFICADO: TODOS | FILMES | SÉRIES */}
           {!query && (
             <div className="inline-flex p-1 bg-white/[0.05] border border-white/[0.1] rounded-xl self-start md:self-auto">
               <button
                 type="button"
+                onClick={() => handleSwitchType('all')}
+                className={`inline-flex items-center gap-2 px-4 sm:px-5 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all ${
+                  mediaType === 'all'
+                    ? 'bg-white text-[#09090B] font-semibold shadow-sm'
+                    : 'text-white/65 hover:text-white'
+                }`}
+              >
+                <LayoutGrid className="w-4 h-4" />
+                Todos
+              </button>
+              <button
+                type="button"
                 onClick={() => handleSwitchType('movie')}
-                className={`inline-flex items-center gap-2 px-5 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all ${
+                className={`inline-flex items-center gap-2 px-4 sm:px-5 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all ${
                   mediaType === 'movie'
                     ? 'bg-white text-[#09090B] font-semibold shadow-sm'
                     : 'text-white/65 hover:text-white'
@@ -548,7 +731,7 @@ export default function Explorer() {
               <button
                 type="button"
                 onClick={() => handleSwitchType('tv')}
-                className={`inline-flex items-center gap-2 px-5 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all ${
+                className={`inline-flex items-center gap-2 px-4 sm:px-5 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all ${
                   mediaType === 'tv'
                     ? 'bg-white text-[#09090B] font-semibold shadow-sm'
                     : 'text-white/65 hover:text-white'
@@ -635,7 +818,7 @@ export default function Explorer() {
               </div>
             </div>
 
-            {/* 2. BARRA ÚNICA DE FILTROS (POPOVERS LIMPOS — SEM PAREDE DE BOTÕES) */}
+            {/* 2. BARRA ÚNICA DE FILTROS (GÊNEROS, SLIDER DE ANO, SLIDER DE NOTA, GRÁTIS BR & SORT) */}
             <div
               ref={toolbarRef}
               className="relative z-30 flex flex-wrap items-center justify-between gap-3"
@@ -702,7 +885,7 @@ export default function Explorer() {
                   )}
                 </div>
 
-                {/* POPOVER: ANO / PERÍODO */}
+                {/* POPOVER: ANO / PERÍODO COM BARRA DUPLA DESLIZANTE */}
                 <div className="relative">
                   <button
                     type="button"
@@ -714,7 +897,7 @@ export default function Explorer() {
                     }`}
                   >
                     <Calendar className="w-3.5 h-3.5" />
-                    <span>{resolvedYearFilter.label}</span>
+                    <span>{yearLabel}</span>
                     <ChevronDown
                       className={`w-3.5 h-3.5 transition-transform ${
                         openMenu === 'year' ? 'rotate-180' : ''
@@ -723,22 +906,98 @@ export default function Explorer() {
                   </button>
 
                   {openMenu === 'year' && (
-                    <div className="absolute left-0 top-full mt-2.5 w-64 bg-[#111115]/98 backdrop-blur-2xl border border-white/[0.14] rounded-2xl shadow-2xl p-3.5 animate-fade-in">
-                      <p className="text-[11px] font-semibold uppercase tracking-widest text-white/45 mb-2.5 px-1">
-                        Período
-                      </p>
-                      <div className="grid grid-cols-2 gap-1.5 mb-3">
-                        {YEAR_PRESETS.map((preset) => {
-                          const active = yearPresetId === preset.id;
+                    <div className="absolute left-0 top-full mt-2.5 w-[min(92vw,320px)] bg-[#111115]/98 backdrop-blur-2xl border border-white/[0.14] rounded-2xl shadow-2xl p-4 animate-fade-in">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[11px] font-semibold uppercase tracking-widest text-white/45">
+                          Faixa de lançamento
+                        </span>
+                        {(draftYearRange[0] > YEAR_MIN || draftYearRange[1] < YEAR_MAX) && (
+                          <button
+                            type="button"
+                            onClick={resetYearFilter}
+                            className="text-xs font-medium text-white/55 hover:text-white transition-colors"
+                          >
+                            Resetar
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Leitura grande da faixa atual */}
+                      <div className="flex items-baseline justify-between mb-4">
+                        <span className="text-2xl font-bold tracking-tight text-white">
+                          {draftYearRange[0] === YEAR_MIN && draftYearRange[1] === YEAR_MAX
+                            ? 'Qualquer ano'
+                            : draftYearRange[0] === draftYearRange[1]
+                              ? draftYearRange[0]
+                              : `${draftYearRange[0]} — ${draftYearRange[1]}`}
+                        </span>
+                        <span className="text-[11px] text-white/40">
+                          {YEAR_MIN}–{YEAR_MAX}
+                        </span>
+                      </div>
+
+                      {/* Barra dupla interativa */}
+                      <div className="relative h-7 flex items-center mb-1">
+                        <div className="w-full h-1.5 rounded-full bg-white/[0.12] relative">
+                          <div
+                            className="absolute top-0 bottom-0 rounded-full bg-white"
+                            style={{
+                              left: `${yearLeftPct}%`,
+                              width: `${Math.max(2, yearRightPct - yearLeftPct)}%`,
+                            }}
+                          />
+                        </div>
+
+                        <input
+                          type="range"
+                          min={YEAR_MIN}
+                          max={YEAR_MAX}
+                          step={1}
+                          value={draftYearRange[0]}
+                          aria-label="Ano inicial"
+                          onChange={(e) => handleYearSliderChange(0, e.target.value)}
+                          onMouseUp={() => commitYearRange(draftYearRange)}
+                          onTouchEnd={() => commitYearRange(draftYearRange)}
+                          className="studio-range absolute inset-0 w-full h-full"
+                          style={{ zIndex: draftYearRange[0] > YEAR_MAX - 8 ? 20 : 10 }}
+                        />
+                        <input
+                          type="range"
+                          min={YEAR_MIN}
+                          max={YEAR_MAX}
+                          step={1}
+                          value={draftYearRange[1]}
+                          aria-label="Ano final"
+                          onChange={(e) => handleYearSliderChange(1, e.target.value)}
+                          onMouseUp={() => commitYearRange(draftYearRange)}
+                          onTouchEnd={() => commitYearRange(draftYearRange)}
+                          className="studio-range absolute inset-0 w-full h-full"
+                          style={{ zIndex: 15 }}
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between text-[10px] font-medium text-white/35 mb-4 px-0.5">
+                        <span>1950</span>
+                        <span>1980</span>
+                        <span>2000</span>
+                        <span>2015</span>
+                        <span>{YEAR_MAX}</span>
+                      </div>
+
+                      {/* Atalhos rápidos */}
+                      <div className="pt-3 border-t border-white/[0.08] grid grid-cols-2 gap-1.5">
+                        {YEAR_QUICK_PRESETS.map((preset) => {
+                          const active =
+                            draftYearRange[0] === preset.from && draftYearRange[1] === preset.to;
                           return (
                             <button
                               key={preset.id}
                               type="button"
-                              onClick={() => handleSelectYearPreset(preset.id)}
-                              className={`px-3 py-2 rounded-xl text-xs font-medium text-left transition-all border ${
+                              onClick={() => applyYearPreset(preset.from, preset.to)}
+                              className={`px-2.5 py-1.5 rounded-xl text-[11px] font-medium text-left transition-all border ${
                                 active
                                   ? 'bg-white text-[#09090B] border-white font-semibold'
-                                  : 'bg-white/[0.03] hover:bg-white/[0.09] text-white/80 border-white/[0.06]'
+                                  : 'bg-white/[0.03] hover:bg-white/[0.09] text-white/75 border-white/[0.07]'
                               }`}
                             >
                               {preset.label}
@@ -746,25 +1005,11 @@ export default function Explorer() {
                           );
                         })}
                       </div>
-
-                      <div className="pt-2.5 border-t border-white/[0.08]">
-                        <label className="block text-[10px] font-semibold uppercase tracking-widest text-white/40 mb-1.5 px-1">
-                          Ou digite um ano exato
-                        </label>
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          placeholder="Ex: 2019"
-                          value={customYear}
-                          onChange={(e) => handleCustomYearChange(e.target.value)}
-                          className="w-full bg-black/50 text-white text-xs font-medium border border-white/[0.14] rounded-xl px-3 py-2 focus:border-white/45 outline-none placeholder-white/30"
-                        />
-                      </div>
                     </div>
                   )}
                 </div>
 
-                {/* POPOVER: NOTA MÍNIMA */}
+                {/* POPOVER: NOTA MÍNIMA COM BARRA DESLIZANTE */}
                 <div className="relative">
                   <button
                     type="button"
@@ -789,37 +1034,118 @@ export default function Explorer() {
                   </button>
 
                   {openMenu === 'rating' && (
-                    <div className="absolute left-0 top-full mt-2.5 w-56 bg-[#111115]/98 backdrop-blur-2xl border border-white/[0.14] rounded-2xl shadow-2xl p-2 animate-fade-in">
-                      {RATING_OPTIONS.map((opt) => {
-                        const active = rating === opt.value;
-                        return (
+                    <div className="absolute left-0 top-full mt-2.5 w-[min(92vw,300px)] bg-[#111115]/98 backdrop-blur-2xl border border-white/[0.14] rounded-2xl shadow-2xl p-4 animate-fade-in">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[11px] font-semibold uppercase tracking-widest text-white/45">
+                          Nota mínima TMDB
+                        </span>
+                        {draftRating > 0 && (
                           <button
-                            key={opt.value}
                             type="button"
-                            onClick={() => handleSelectRating(opt.value)}
-                            className={`w-full text-left px-3 py-2.5 rounded-xl flex items-center justify-between transition-colors ${
-                              active
-                                ? 'bg-white text-[#09090B]'
-                                : 'text-white/85 hover:bg-white/[0.07]'
-                            }`}
+                            onClick={() => {
+                              setDraftRating(0);
+                              commitRating(0);
+                            }}
+                            className="text-xs font-medium text-white/55 hover:text-white transition-colors"
                           >
-                            <div>
-                              <span className="block text-xs font-semibold">{opt.label}</span>
-                              <span
-                                className={`block text-[10px] ${
-                                  active ? 'text-[#09090B]/65' : 'text-white/40'
-                                }`}
-                              >
-                                {opt.desc}
-                              </span>
-                            </div>
-                            {active && <Check className="w-3.5 h-3.5" />}
+                            Resetar
                           </button>
-                        );
-                      })}
+                        )}
+                      </div>
+
+                      <div className="flex items-baseline justify-between mb-4">
+                        <div className="inline-flex items-center gap-2">
+                          <Star
+                            className={`w-5 h-5 ${
+                              draftRating > 0
+                                ? 'text-amber-400 fill-amber-400'
+                                : 'text-white/25'
+                            }`}
+                          />
+                          <span className="text-2xl font-bold tracking-tight text-white">
+                            {draftRating > 0 ? `${draftRating.toFixed(1)}+` : 'Todas'}
+                          </span>
+                        </div>
+                        <span className="text-[11px] font-medium text-amber-300/80">
+                          {getRatingDescriptor(draftRating)}
+                        </span>
+                      </div>
+
+                      {/* Barra deslizante dourada */}
+                      <div className="relative h-7 flex items-center mb-1">
+                        <div className="w-full h-1.5 rounded-full bg-white/[0.12] relative overflow-hidden">
+                          <div
+                            className="absolute top-0 bottom-0 left-0 rounded-full bg-gradient-to-r from-amber-500 to-amber-300"
+                            style={{ width: `${ratingPct}%` }}
+                          />
+                        </div>
+
+                        <input
+                          type="range"
+                          min={0}
+                          max={RATING_MAX}
+                          step={0.5}
+                          value={draftRating}
+                          aria-label="Nota mínima TMDB"
+                          onChange={(e) => handleRatingSliderChange(e.target.value)}
+                          onMouseUp={() => commitRating(draftRating)}
+                          onTouchEnd={() => commitRating(draftRating)}
+                          className="studio-range studio-range-amber absolute inset-0 w-full h-full z-10"
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between text-[10px] font-medium text-white/35 mb-4 px-0.5">
+                        <span>0.0</span>
+                        <span>5.0</span>
+                        <span>7.0</span>
+                        <span>8.0</span>
+                        <span>9.5</span>
+                      </div>
+
+                      {/* Atalhos rápidos */}
+                      <div className="pt-3 border-t border-white/[0.08] grid grid-cols-4 gap-1.5">
+                        {RATING_QUICK_PRESETS.map((opt) => {
+                          const active = draftRating === opt.value;
+                          return (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              onClick={() => {
+                                setDraftRating(opt.value);
+                                commitRating(opt.value);
+                              }}
+                              className={`py-1.5 rounded-xl text-[11px] font-medium text-center transition-all border ${
+                                active
+                                  ? 'bg-amber-400 text-[#09090B] border-amber-400 font-semibold'
+                                  : 'bg-white/[0.03] hover:bg-white/[0.09] text-white/75 border-white/[0.07]'
+                              }`}
+                            >
+                              {opt.label}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
                 </div>
+
+                {/* TOGGLE: GRÁTIS NO BRASIL (FREE + ADS) */}
+                <button
+                  type="button"
+                  onClick={toggleFreeOnly}
+                  aria-pressed={freeOnly}
+                  className={`h-10 px-4 rounded-xl border text-xs sm:text-sm font-medium inline-flex items-center gap-2 transition-all ${
+                    freeOnly
+                      ? 'bg-emerald-500/20 border-emerald-400/60 text-emerald-200 font-semibold shadow-[0_0_20px_rgba(16,185,129,0.18)]'
+                      : 'bg-white/[0.04] hover:bg-white/[0.1] border-white/[0.1] text-white/85'
+                  }`}
+                >
+                  <Sparkles
+                    className={`w-3.5 h-3.5 ${freeOnly ? 'text-emerald-300' : 'text-emerald-400/75'}`}
+                  />
+                  <span>Grátis no BR</span>
+                  {freeOnly && <Check className="w-3.5 h-3.5 text-emerald-300" />}
+                </button>
               </div>
 
               {/* DIREITA: ORDENAR POR */}
@@ -870,6 +1196,18 @@ export default function Explorer() {
             {/* 3. CHIPS REMOVÍVEIS DOS FILTROS ATIVOS (SÓ APARECE QUANDO HÁ FILTRO) */}
             {hasAnyFilter && (
               <div className="flex flex-wrap items-center gap-2 pt-1">
+                {freeOnly && (
+                  <button
+                    type="button"
+                    onClick={toggleFreeOnly}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-400/35 text-xs font-medium text-emerald-200 transition-colors"
+                  >
+                    <Sparkles className="w-3 h-3 text-emerald-300" />
+                    <span>Grátis no Brasil</span>
+                    <X className="w-3 h-3 text-emerald-200/70" />
+                  </button>
+                )}
+
                 {activeProviderObjs.map((prov) => (
                   <button
                     key={`chip-prov-${prov.provider_id}`}
@@ -902,10 +1240,10 @@ export default function Explorer() {
                 {hasYearFilter && (
                   <button
                     type="button"
-                    onClick={() => handleSelectYearPreset('all')}
+                    onClick={resetYearFilter}
                     className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.08] hover:bg-white/[0.15] border border-white/[0.12] text-xs font-medium text-white transition-colors"
                   >
-                    <span>{resolvedYearFilter.label}</span>
+                    <span>{yearLabel}</span>
                     <X className="w-3 h-3 text-white/55" />
                   </button>
                 )}
@@ -913,7 +1251,10 @@ export default function Explorer() {
                 {rating > 0 && (
                   <button
                     type="button"
-                    onClick={() => handleSelectRating(0)}
+                    onClick={() => {
+                      setDraftRating(0);
+                      commitRating(0);
+                    }}
                     className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.08] hover:bg-white/[0.15] border border-white/[0.12] text-xs font-medium text-amber-300 transition-colors"
                   >
                     <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
@@ -944,9 +1285,9 @@ export default function Explorer() {
         ) : results.length > 0 ? (
           <>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-5">
-              {results.map((item, index) => (
+              {results.map((item) => (
                 <MovieCard
-                  key={`${item.media_type}-${item.id}-${index}`}
+                  key={`${item.media_type}-${item.id}`}
                   id={item.id}
                   title={item.displayTitle}
                   image={getPosterUrl(item.poster_path)}
@@ -957,26 +1298,32 @@ export default function Explorer() {
               ))}
             </div>
 
+            {/* INFINITE SCROLL AUTOMÁTICO (SENTINELA + SHIMMER INLINE) */}
             {!query && hasMore && (
-              <div className="flex justify-center mt-14">
-                <button
-                  type="button"
-                  onClick={handleLoadMore}
-                  disabled={loadingMore}
-                  className="bg-white/[0.06] hover:bg-white/[0.14] text-white border border-white/[0.14] font-medium text-sm py-3.5 px-10 rounded-xl transition-all flex items-center gap-2.5 disabled:opacity-50"
-                >
-                  {loadingMore ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin text-white" />
-                      Carregando...
-                    </>
-                  ) : (
-                    <>
-                      <Plus className="w-4 h-4 text-white" />
-                      Carregar Mais {mediaType === 'movie' ? 'Filmes' : 'Séries'}
-                    </>
-                  )}
-                </button>
+              <div className="mt-8">
+                {loadingMore && (
+                  <div className="space-y-6">
+                    <CardGridSkeleton
+                      count={6}
+                      cols="grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
+                    />
+                    <div className="flex justify-center">
+                      <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/[0.05] border border-white/[0.09] text-xs font-medium text-white/60">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-white/80" />
+                        Carregando mais títulos...
+                      </span>
+                    </div>
+                  </div>
+                )}
+                <div ref={loadMoreSentinelRef} className="h-6 w-full" aria-hidden="true" />
+              </div>
+            )}
+
+            {!query && !hasMore && results.length > 0 && (
+              <div className="flex items-center justify-center gap-3 mt-14 text-xs text-white/35">
+                <span className="h-px w-12 bg-white/10" />
+                <span>Fim dos resultados para este filtro</span>
+                <span className="h-px w-12 bg-white/10" />
               </div>
             )}
           </>
@@ -987,7 +1334,7 @@ export default function Explorer() {
               Nenhum título encontrado
             </h3>
             <p className="text-sm text-white/50 mb-6">
-              Tente combinar outros streamings, gêneros ou ampliar o período.
+              Tente combinar outros streamings, gêneros ou ampliar a faixa de ano e nota.
             </p>
             {hasAnyFilter && (
               <button

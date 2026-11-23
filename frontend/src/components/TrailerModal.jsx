@@ -4,6 +4,7 @@ import { getMediaVideos } from '../services/api';
 import { isValidYouTubeKey } from '../utils/security';
 import {
   loadYouTubeIframeApi,
+  isYouTubePlayerAttached,
   extractCaptionOptions,
   applyCaptionSelection,
 } from '../utils/youtubeApi';
@@ -51,7 +52,11 @@ export default function TrailerModal({
 
   const containerRef = useRef(null);
   const iframeRef = useRef(null);
+  const rawPlayerRef = useRef(null);
   const ytPlayerRef = useRef(null);
+  const ytReadyRef = useRef(false);
+  const isMountedRef = useRef(true);
+  const bindTokenRef = useRef(0);
   const boundKeyRef = useRef(null);
   const captionOptionsRef = useRef([]);
   const desiredCaptionRef = useRef('off');
@@ -69,8 +74,40 @@ export default function TrailerModal({
     onCloseRef.current = onClose;
   }, [onClose]);
 
+  const getReadyPlayer = useCallback(() => {
+    if (!isMountedRef.current || !ytReadyRef.current) return null;
+    if (!isYouTubePlayerAttached(ytPlayerRef.current, iframeRef.current)) return null;
+    return ytPlayerRef.current;
+  }, []);
+
+  const destroyCurrentPlayer = useCallback(() => {
+    bindTokenRef.current += 1;
+    ytReadyRef.current = false;
+    ytPlayerRef.current = null;
+    boundKeyRef.current = null;
+    const inst = rawPlayerRef.current;
+    rawPlayerRef.current = null;
+    if (inst && typeof inst.destroy === 'function') {
+      try {
+        inst.destroy();
+      } catch {
+        // ignora
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      destroyCurrentPlayer();
+    };
+  }, [destroyCurrentPlayer]);
+
   const sendYTCommand = useCallback((func, args = []) => {
-    const win = iframeRef.current?.contentWindow;
+    const iframeEl = iframeRef.current;
+    if (!iframeEl || !iframeEl.isConnected) return;
+    const win = iframeEl.contentWindow;
     if (!win) return;
     try {
       win.postMessage(
@@ -83,7 +120,7 @@ export default function TrailerModal({
   }, []);
 
   const syncPlayerMetadata = useCallback((player, markLoadedIfEmpty = false) => {
-    if (!player) return;
+    if (!isMountedRef.current || !isYouTubePlayerAttached(player, iframeRef.current)) return;
 
     try {
       const levels = player.getAvailableQualityLevels?.();
@@ -192,10 +229,9 @@ export default function TrailerModal({
       if (fsTimerRef.current) clearTimeout(fsTimerRef.current);
       if (captionRetryTimerRef.current) clearTimeout(captionRetryTimerRef.current);
       if (captionProbeTimerRef.current) clearTimeout(captionProbeTimerRef.current);
-      ytPlayerRef.current = null;
-      boundKeyRef.current = null;
+      destroyCurrentPlayer();
     };
-  }, [isOpen, handleSmoothClose, sendYTCommand, bumpActivity]);
+  }, [isOpen, handleSmoothClose, sendYTCommand, bumpActivity, destroyCurrentPlayer]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -307,35 +343,74 @@ export default function TrailerModal({
   )}`;
 
   const handleIframeLoad = () => {
-    iframeRef.current?.contentWindow?.postMessage(
+    if (!isMountedRef.current) return;
+    const iframeEl = iframeRef.current;
+    if (!iframeEl || !iframeEl.isConnected) return;
+    iframeEl.contentWindow?.postMessage(
       JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }),
       'https://www.youtube-nocookie.com'
     );
 
     const currentKey = activeKey;
+    const token = ++bindTokenRef.current;
     loadYouTubeIframeApi().then((YT) => {
-      if (!YT || !iframeRef.current || boundKeyRef.current === currentKey) return;
+      if (
+        !isMountedRef.current ||
+        token !== bindTokenRef.current ||
+        !YT ||
+        !iframeRef.current ||
+        !iframeRef.current.isConnected ||
+        boundKeyRef.current === currentKey
+      ) {
+        return;
+      }
       boundKeyRef.current = currentKey;
       try {
         const player = new YT.Player(iframeRef.current, {
           events: {
             onReady: (e) => {
-              ytPlayerRef.current = e.target;
-              try {
-                e.target.loadModule?.('captions');
-              } catch {
-                // ignora
+              if (
+                !isMountedRef.current ||
+                token !== bindTokenRef.current ||
+                !isYouTubePlayerAttached(e.target, iframeRef.current)
+              ) {
+                return;
               }
+              ytReadyRef.current = true;
+              ytPlayerRef.current = e.target;
               if (captionProbeTimerRef.current) clearTimeout(captionProbeTimerRef.current);
               captionProbeTimerRef.current = setTimeout(() => {
-                syncPlayerMetadata(e.target, true);
+                const readyP = getReadyPlayer();
+                if (!readyP) return;
+                try {
+                  readyP.loadModule?.('captions');
+                } catch {
+                  // ignora
+                }
+                syncPlayerMetadata(readyP, true);
               }, 900);
             },
             onApiChange: (e) => {
+              if (
+                !isMountedRef.current ||
+                token !== bindTokenRef.current ||
+                !ytReadyRef.current ||
+                !isYouTubePlayerAttached(e.target, iframeRef.current)
+              ) {
+                return;
+              }
               ytPlayerRef.current = e.target;
               syncPlayerMetadata(e.target, false);
             },
             onStateChange: (e) => {
+              if (
+                !isMountedRef.current ||
+                token !== bindTokenRef.current ||
+                !ytReadyRef.current ||
+                !isYouTubePlayerAttached(e.target, iframeRef.current)
+              ) {
+                return;
+              }
               ytPlayerRef.current = e.target;
               if (e.data === 1) {
                 syncPlayerMetadata(e.target, false);
@@ -343,7 +418,7 @@ export default function TrailerModal({
             },
           },
         });
-        ytPlayerRef.current = player;
+        rawPlayerRef.current = player;
       } catch {
         // fallback para postMessage
       }
@@ -447,21 +522,22 @@ export default function TrailerModal({
             onCaptionLangChange={(langCode) => {
               desiredCaptionRef.current = langCode;
               setCaptionLang(langCode);
-              const player = ytPlayerRef.current;
+              const player = getReadyPlayer();
               if (player) {
                 applyCaptionSelection(player, langCode, captionOptionsRef.current);
                 if (captionRetryTimerRef.current) clearTimeout(captionRetryTimerRef.current);
                 if (langCode !== 'off') {
                   captionRetryTimerRef.current = setTimeout(() => {
-                    if (desiredCaptionRef.current === langCode && ytPlayerRef.current) {
-                      const { options } = extractCaptionOptions(ytPlayerRef.current);
+                    const readyP = getReadyPlayer();
+                    if (desiredCaptionRef.current === langCode && readyP) {
+                      const { options } = extractCaptionOptions(readyP);
                       if (options.length > 0) {
                         captionOptionsRef.current = options;
                         setCaptionOptions(options);
                         setCaptionsLoaded(true);
                       }
                       applyCaptionSelection(
-                        ytPlayerRef.current,
+                        readyP,
                         langCode,
                         captionOptionsRef.current
                       );
@@ -483,10 +559,11 @@ export default function TrailerModal({
             }}
             onQualityChange={(qVal) => {
               setQuality(qVal);
-              if (ytPlayerRef.current) {
+              const player = getReadyPlayer();
+              if (player) {
                 try {
-                  ytPlayerRef.current.setPlaybackQuality?.(qVal);
-                  ytPlayerRef.current.setPlaybackQualityRange?.(qVal, qVal);
+                  player.setPlaybackQuality?.(qVal);
+                  player.setPlaybackQualityRange?.(qVal, qVal);
                 } catch {
                   // ignora
                 }

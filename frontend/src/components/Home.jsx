@@ -17,7 +17,6 @@ import {
 } from 'lucide-react';
 import TrailerModal from './TrailerModal';
 import TrailerPreviewCard from './TrailerPreviewCard';
-import AccordionGallery from './AccordionGallery';
 import { HeroSkeleton, CardGridSkeleton } from './Skeletons';
 import {
   getHeroShowcase,
@@ -40,6 +39,7 @@ import {
 } from '../utils/storage';
 import { useToast } from '../utils/toast';
 import { resolvePlatformMeta } from '../utils/streaming';
+import { preloadImage, ensureImageDecoded } from '../utils/imagePreload';
 
 const GENRE_LABELS = {
   28: 'Ação',
@@ -67,44 +67,16 @@ const GENRE_LABELS = {
   10768: 'Guerra & Política',
 };
 
-// Categorias de filmes para a galeria sanfona 3D (GSAP AccordionGallery)
+// Categorias de filmes (grid editorial 4x2 minimalista)
 const MOVIE_CATEGORIES = [
-  {
-    id: 28,
-    matchIds: [28, 10759],
-    label: 'Ação',
-    subtitle: 'Adrenalina e combates épicos',
-  },
-  {
-    id: 878,
-    matchIds: [878, 10765],
-    label: 'Ficção Científica',
-    subtitle: 'Futuros, espaço e tecnologia',
-  },
-  {
-    id: 18,
-    matchIds: [18],
-    label: 'Drama',
-    subtitle: 'Histórias intensas e premiadas',
-  },
-  {
-    id: 53,
-    matchIds: [53, 9648, 80],
-    label: 'Suspense',
-    subtitle: 'Mistério e tensão do início ao fim',
-  },
-  {
-    id: 27,
-    matchIds: [27, 9648],
-    label: 'Terror',
-    subtitle: 'Sustos, sobrenatural e horror',
-  },
-  {
-    id: 35,
-    matchIds: [35],
-    label: 'Comédia',
-    subtitle: 'Para relaxar e dar boas risadas',
-  },
+  { id: 28, matchIds: [28, 10759], label: 'Ação' },
+  { id: 878, matchIds: [878, 10765], label: 'Ficção Científica' },
+  { id: 27, matchIds: [27], label: 'Terror' },
+  { id: 53, matchIds: [53, 9648, 80], label: 'Suspense' },
+  { id: 12, matchIds: [12, 14], label: 'Aventura' },
+  { id: 18, matchIds: [18], label: 'Drama' },
+  { id: 35, matchIds: [35], label: 'Comédia' },
+  { id: 16, matchIds: [16, 10751], label: 'Animação' },
 ];
 
 const LAST_SHOWN_KEY = 'studio_last_home_ids';
@@ -772,6 +744,16 @@ export default function Home({ onOpenSurprise }) {
   const [slideTick, setSlideTick] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
   const [loading, setLoading] = useState(!cachedReady);
+  const [mountedTrailerIndices, setMountedTrailerIndices] = useState(() => [
+    cachedReady ? homeCache.currentHeroIndex : 0,
+  ]);
+  const [prebufferStep, setPrebufferStep] = useState(0);
+
+  const navTokenRef = useRef(0);
+  const currentHeroIndexRef = useRef(currentHeroIndex);
+  useEffect(() => {
+    currentHeroIndexRef.current = currentHeroIndex;
+  }, [currentHeroIndex]);
 
   const [, setFavVersion] = useState(0);
   const [heroTrailerExpanded, setHeroTrailerExpanded] = useState(false);
@@ -861,23 +843,29 @@ export default function Home({ onOpenSurprise }) {
         { requireBackdrop: true }
       );
 
-      // 2. Destaque da Curadoria (3 slides no banner largo, sem repetir Hero nem Em Alta)
+      // 2. Destaque da Curadoria (3 slides no banner largo, priorizando nota >= 6.5 e sem repetir)
+      const spotlightCandidates = [...nowMov, ...trendingP1, ...trendingAlt, ...popMovAlt, ...popTvAlt];
+      const wellRatedSpotlight = spotlightCandidates.filter((i) => Number(i?.vote_average) >= 6.5);
       const pickedSpotlight = smartPick(
-        [...nowMov, ...trendingP1, ...trendingAlt, ...popMovAlt, ...popTvAlt],
+        wellRatedSpotlight.length >= 3 ? wellRatedSpotlight : spotlightCandidates,
         3,
         editorialUsed,
         prevShown,
         { requireBackdrop: true }
       );
 
-      // 3. Aclamados pela Crítica (4 filmes bem avaliados, sem repetir anteriores)
+      // 3. Aclamados pela Crítica (estritamente obras 8.0+ com base sólida de votos, sem misturar populares genéricos)
+      const strictAcclaimed = topRatedMov.filter(
+        (m) => Number(m?.vote_average) >= 8.0 && Number(m?.vote_count || 0) >= 300
+      );
+      const fallbackAcclaimed = topRatedMov.filter((m) => Number(m?.vote_average) >= 7.8);
       const pickedAwards = smartPick(
-        [...topRatedMov, ...popMovAlt, ...popMovP1],
+        strictAcclaimed.length >= 4 ? strictAcclaimed : fallbackAcclaimed,
         4,
         editorialUsed,
         prevShown,
         { requireBackdrop: true }
-      );
+      ).sort((a, b) => Number(b.vote_average || 0) - Number(a.vote_average || 0));
 
       // 4. TOP 10 Filmes Hoje (excluindo Hero para não repetir o topo!)
       const movieRankExcluded = new Set(heroIdSet);
@@ -956,25 +944,88 @@ export default function Home({ onOpenSurprise }) {
     };
   }, []);
 
+  // Pré-carrega e decodifica na GPU todos os backdrops (w1280), capas de preview e pôsteres da Hero
+  useEffect(() => {
+    if (!heroItems.length) return;
+    heroItems.forEach((item) => {
+      if (item.backdrop_path) preloadImage(getBackdropUrl(item.backdrop_path, 'w1280'));
+      if (item.preview_backdrop_path) {
+        preloadImage(getBackdropUrl(item.preview_backdrop_path, 'w780'));
+      }
+      if (item.poster_path) preloadImage(getPosterUrl(item.poster_path, 'w185'));
+    });
+  }, [heroItems]);
+
+  const handleTrailerPrebufferReady = useCallback(() => {
+    setPrebufferStep((s) => s + 1);
+  }, []);
+
+  // Fila escalonada (1 por vez): aquece ~3.6s de cada trailer da Hero em standby e pausa em RAM
+  useEffect(() => {
+    const total = heroItems.length;
+    if (total <= 1 || mountedTrailerIndices.length >= total || heroTrailerExpanded) return;
+
+    const findNextToWarm = () => {
+      for (let offset = 1; offset < total; offset += 1) {
+        const candidate = (currentHeroIndex + offset) % total;
+        if (!mountedTrailerIndices.includes(candidate)) return candidate;
+      }
+      return -1;
+    };
+
+    const nextIdx = findNextToWarm();
+    if (nextIdx === -1) return;
+
+    // Se o passo avançou via onPrebufferReady, aquece o próximo rapidamente; senão usa fallback gentil
+    const delayMs = prebufferStep > 0 ? 550 : 2200;
+    const timer = setTimeout(() => {
+      setMountedTrailerIndices((prev) =>
+        prev.includes(nextIdx) ? prev : [...prev, nextIdx]
+      );
+    }, delayMs);
+
+    return () => clearTimeout(timer);
+  }, [heroItems.length, currentHeroIndex, mountedTrailerIndices, prebufferStep, heroTrailerExpanded]);
+
+  // Troca de slide atômica: aguarda decodificação do backdrop w1280 antes de sincronizar fundo + texto + trailer
   const goToSlide = useCallback(
-    (nextIndex) => {
+    async (nextIndex) => {
       if (heroItems.length <= 1) return;
       const wrapped = (nextIndex + heroItems.length) % heroItems.length;
-      if (wrapped === currentHeroIndex) return;
-      setPrevHeroIndex(currentHeroIndex);
+      if (wrapped === currentHeroIndexRef.current) return;
+
+      const token = ++navTokenRef.current;
+      const nextItem = heroItems[wrapped];
+
+      // Garante que o iframe desse slide já entre no pool imediatamente caso ainda não estivesse
+      setMountedTrailerIndices((prev) => (prev.includes(wrapped) ? prev : [...prev, wrapped]));
+
+      const nextBackdropUrl = nextItem?.backdrop_path
+        ? getBackdropUrl(nextItem.backdrop_path, 'w1280')
+        : null;
+      if (nextBackdropUrl) {
+        await ensureImageDecoded(nextBackdropUrl, 450);
+      }
+
+      if (token !== navTokenRef.current) return;
+
+      const prevIdx = currentHeroIndexRef.current;
+      if (wrapped === prevIdx) return;
+
+      setPrevHeroIndex(prevIdx);
       setCurrentHeroIndex(wrapped);
       setSlideTick((t) => t + 1);
     },
-    [heroItems.length, currentHeroIndex]
+    [heroItems]
   );
 
   useEffect(() => {
     if (heroItems.length <= 1 || isHovered || heroTrailerExpanded || trailerItem) return;
     const interval = setInterval(() => {
-      goToSlide(currentHeroIndex + 1);
-    }, 8000);
+      goToSlide(currentHeroIndexRef.current + 1);
+    }, 9000);
     return () => clearInterval(interval);
-  }, [heroItems.length, isHovered, heroTrailerExpanded, trailerItem, currentHeroIndex, goToSlide]);
+  }, [heroItems.length, isHovered, heroTrailerExpanded, trailerItem, goToSlide]);
 
   const handleToggleItemFav = (item) => {
     if (!item) return;
@@ -1005,23 +1056,33 @@ export default function Home({ onOpenSurprise }) {
     }
 
     const used = new Set();
+    const isAvailable = (m) => !used.has(m.backdrop_path || m.poster_path);
+
     return MOVIE_CATEGORIES.map((cat) => {
-      let match = pool.find(
-        (m) =>
-          !used.has(m.backdrop_path || m.poster_path) &&
-          (m.genre_ids || []).some((gid) => cat.matchIds.includes(gid))
-      );
-      if (!match) {
-        match = pool.find((m) => !used.has(m.backdrop_path || m.poster_path));
-      }
+      // 1) Filme com backdrop e gênero exato; 2) Qualquer mídia com backdrop e matchIds; 3) Fallback sem duplicar
+      const match =
+        pool.find(
+          (m) =>
+            isAvailable(m) &&
+            m.backdrop_path &&
+            m.media_type === 'movie' &&
+            (m.genre_ids || []).includes(cat.id)
+        ) ||
+        pool.find(
+          (m) =>
+            isAvailable(m) &&
+            m.backdrop_path &&
+            (m.genre_ids || []).some((gid) => cat.matchIds.includes(gid))
+        ) ||
+        pool.find((m) => isAvailable(m) && m.backdrop_path) ||
+        pool.find((m) => isAvailable(m));
+
       const chosenPath = match?.backdrop_path || match?.poster_path || '';
       if (chosenPath) used.add(chosenPath);
 
       return {
         id: cat.id,
-        eyebrow: 'Filmes',
         label: cat.label,
-        subtitle: cat.subtitle,
         image: match?.backdrop_path
           ? getBackdropUrl(match.backdrop_path, 'w780')
           : match?.poster_path
@@ -1031,13 +1092,6 @@ export default function Home({ onOpenSurprise }) {
       };
     });
   }, [categoryPool]);
-
-  const handleSelectCategory = useCallback(
-    (item) => {
-      if (item?.link) navigate(item.link);
-    },
-    [navigate]
-  );
 
   if (loading) {
     return (
@@ -1097,8 +1151,9 @@ export default function Home({ onOpenSurprise }) {
           {prevHero && (
             <div className="absolute inset-0 z-0 pointer-events-none">
               <img
-                src={getBackdropUrl(prevHero.backdrop_path)}
+                src={getBackdropUrl(prevHero.backdrop_path, 'w1280')}
                 alt=""
+                decoding="sync"
                 className="w-full h-full object-cover object-center md:object-top"
               />
             </div>
@@ -1111,8 +1166,10 @@ export default function Home({ onOpenSurprise }) {
             }`}
           >
             <img
-              src={getBackdropUrl(activeHero.backdrop_path)}
+              src={getBackdropUrl(activeHero.backdrop_path, 'w1280')}
               alt={activeHero.displayTitle}
+              decoding="sync"
+              fetchPriority="high"
               className="w-full h-full object-cover object-center md:object-top"
             />
           </div>
@@ -1308,17 +1365,42 @@ export default function Home({ onOpenSurprise }) {
               </div>
             )}
 
-            <TrailerPreviewCard
-              key={`trailer-${activeHero.media_type}-${activeHero.id}`}
-              mediaId={activeHero.id}
-              mediaType={activeHero.media_type}
-              title={activeHero.displayTitle}
-              backdropPath={activeHero.backdrop_path}
-              initialTrailerKey={activeHero.trailer_key}
-              paused={Boolean(trailerItem)}
-              onExpandChange={setHeroTrailerExpanded}
-              className="animate-mon-trailer w-52 sm:w-72 lg:w-[310px]"
-            />
+            {/* Pool persistente de trailers da Hero: pré-carregados e mantidos em RAM sem re-requisitar */}
+            <div className="relative isolate w-52 sm:w-72 lg:w-[310px] aspect-[16/10] flex-shrink-0">
+              {heroItems.map((item, idx) => {
+                const isSlideActive = idx === currentHeroIndex;
+                const isMountedInPool = isSlideActive || mountedTrailerIndices.includes(idx);
+
+                return (
+                  <div
+                    key={`hero-trailer-${item.media_type}-${item.id}`}
+                    className={`absolute inset-0 transition-opacity duration-500 ${
+                      isSlideActive
+                        ? 'opacity-100 z-20 pointer-events-auto'
+                        : 'opacity-0 z-0 pointer-events-none'
+                    }`}
+                    aria-hidden={!isSlideActive}
+                  >
+                    <TrailerPreviewCard
+                      mediaId={item.id}
+                      mediaType={item.media_type}
+                      title={item.displayTitle}
+                      backdropPath={item.backdrop_path}
+                      previewImagePath={item.preview_backdrop_path || null}
+                      avoidSameAsHero
+                      initialTrailerKey={item.trailer_key}
+                      paused={Boolean(trailerItem)}
+                      isActive={isSlideActive}
+                      shouldMountIframe={isMountedInPool}
+                      preloadSeconds={3.6}
+                      onPrebufferReady={handleTrailerPrebufferReady}
+                      onExpandChange={setHeroTrailerExpanded}
+                      className="w-full h-full"
+                    />
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </section>
       )}
@@ -1327,35 +1409,54 @@ export default function Home({ onOpenSurprise }) {
       {/* LAYOUT EDITORIAL VIVO ABAIXO DA HERO (ESTÉTICA STUDIO)           */}
       {/* ================================================================ */}
       <div className="container mx-auto px-5 sm:px-8 lg:px-14 mt-14 space-y-20">
-        {/* 1. CATEGORIAS DE FILMES (GALERIA SANFONA 3D COM GSAP) */}
+        {/* 1. FILMES POR CATEGORIA (GRID EDITORIAL 4x2 MINIMALISTA) */}
         <section>
-          <SectionHeader
-            title="Categorias de Filmes"
-            subtitle="Passe o mouse para explorar cada estilo e clique para abrir o catálogo"
-            linkTo="/explorar?tipo=movie"
-            linkLabel="Todos os filmes"
-          />
+          <div className="flex items-center justify-between gap-4 mb-6">
+            <h2 className="text-2xl sm:text-3xl font-semibold tracking-tight text-white">
+              Filmes
+            </h2>
+            <Link
+              to="/explorar?tipo=movie"
+              className="text-xs sm:text-sm font-medium text-white/60 hover:text-white transition-colors"
+            >
+              Ver tudo
+            </Link>
+          </div>
 
-          <AccordionGallery
-            items={categoryItems}
-            defaultIndex={2}
-            accentColor="#FE3131"
-            overlayColor="#09090B"
-            textColor="#ffffff"
-            height={440}
-            gap={10}
-            radius={16}
-            expandRatio={0.46}
-            duration={0.6}
-            ease="power3.out"
-            parallax={0.5}
-            tilt={8}
-            stagger={0.06}
-            trigger="hover"
-            showLabels
-            grayscale
-            onSelect={handleSelectCategory}
-          />
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+            {categoryItems.map((cat) => (
+              <Link
+                key={cat.id}
+                to={cat.link}
+                className="group relative aspect-[16/10] rounded-2xl overflow-hidden bg-[#111115] border border-white/[0.07] hover:border-white/25 transition-all duration-300 shadow-lg shadow-black/50"
+              >
+                {cat.image && (
+                  <img
+                    src={cat.image}
+                    alt={cat.label}
+                    loading="lazy"
+                    className="w-full h-full object-cover object-center brightness-[0.58] saturate-[0.82] group-hover:brightness-[0.78] group-hover:saturate-100 group-hover:scale-105 transition-all duration-500"
+                  />
+                )}
+
+                {/* Vinheta escura editorial que funde as bordas com o fundo escuro e destaca o título */}
+                <div className="absolute inset-0 bg-gradient-to-b from-black/45 via-black/25 to-black/75 group-hover:from-black/35 group-hover:via-black/15 group-hover:to-black/65 transition-colors duration-300" />
+                <div
+                  className="absolute inset-0 pointer-events-none"
+                  style={{
+                    background:
+                      'radial-gradient(circle at center, rgba(9,9,11,0.12) 0%, rgba(9,9,11,0.68) 100%)',
+                  }}
+                />
+
+                <div className="absolute inset-0 flex items-center justify-center p-4">
+                  <span className="font-display text-base sm:text-lg font-semibold tracking-tight text-white/95 group-hover:text-white group-hover:scale-105 drop-shadow-[0_2px_14px_rgba(0,0,0,0.9)] transition-all duration-300 text-center">
+                    {cat.label}
+                  </span>
+                </div>
+              </Link>
+            ))}
+          </div>
         </section>
 
         {/* 2. EM ALTA NO STUDIO (GRID 4 COLUNAS COM PLAY RÁPIDO DE TRAILER) */}
@@ -1469,8 +1570,8 @@ export default function Home({ onOpenSurprise }) {
           <section>
             <SectionHeader
               title="Aclamados pela Crítica"
-              subtitle="Obras essenciais com as maiores notas do público e da crítica"
-              linkTo="/explorar?tipo=movie&sort=vote_average.desc"
+              subtitle="Obras essenciais com nota 8.0+ do público e da crítica"
+              linkTo="/explorar?tipo=movie&sort=vote_average.desc&nota=8"
             />
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
@@ -1536,16 +1637,12 @@ export default function Home({ onOpenSurprise }) {
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 sm:gap-5">
               {people.map((person) => {
                 const topWork = person.known_for?.[0];
-                const workLink = topWork
-                  ? topWork.media_type === 'movie'
-                    ? `/filme/${topWork.id}`
-                    : `/serie/${topWork.id}`
-                  : '/explorar';
 
                 return (
                   <Link
                     key={person.id}
-                    to={workLink}
+                    to={`/artista/${person.id}`}
+                    state={{ personPrefill: person }}
                     className="group flex flex-col"
                   >
                     <div className="relative aspect-[4/5] rounded-2xl overflow-hidden bg-[#111115] border border-white/[0.08] group-hover:border-white/30 transition-all duration-300 shadow-lg shadow-black/50 mb-3">

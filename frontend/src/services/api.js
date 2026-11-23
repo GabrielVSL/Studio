@@ -41,8 +41,8 @@ const normalizeMediaItem = (item, fallbackType = "tv") => {
   };
 };
 
-const safeFetchJson = async (url) => {
-  const response = await fetch(url);
+const safeFetchJson = async (url, options = undefined) => {
+  const response = await fetch(url, options);
   if (!response.ok) {
     throw new Error(`HTTP ${response.status}`);
   }
@@ -174,6 +174,20 @@ export const getPopularPeople = async (page = 1) => {
   }
 };
 
+export const getPersonDetails = async (id) => {
+  try {
+    const data = await safeFetchJson(`${BASE_URL}/people/${id}`);
+    return {
+      ...data,
+      known_for: (data.known_for || []).map((i) => normalizeMediaItem(i, i.media_type)),
+      credits: (data.credits || []).map((i) => normalizeMediaItem(i, i.media_type)),
+    };
+  } catch (error) {
+    console.error(`Erro ao buscar detalhes do artista (${id}):`, error);
+    return null;
+  }
+};
+
 // ==========================================
 // DETALHES (FILME OU SÉRIE)
 // ==========================================
@@ -237,16 +251,18 @@ export const getMediaVideos = async (id, mediaType = "tv") => {
 // ==========================================
 // BUSCA UNIFICADA (FILMES + SÉRIES)
 // ==========================================
-export const searchMedia = async (query, type = "multi") => {
+export const searchMedia = async (query, type = "multi", { signal } = {}) => {
   if (!query?.trim()) return [];
   try {
     const data = await safeFetchJson(
-      `${BASE_URL}/search?query=${encodeURIComponent(query.trim())}&type=${type}`
+      `${BASE_URL}/search?query=${encodeURIComponent(query.trim())}&type=${type}`,
+      signal ? { signal } : undefined
     );
     return (data.results || []).map((i) =>
       normalizeMediaItem(i, type === "movie" ? "movie" : "tv")
     );
   } catch (error) {
+    if (error?.name === "AbortError") return null;
     console.error("Erro na pesquisa:", error);
     return [];
   }
@@ -287,6 +303,7 @@ export const discoverMedia = async ({
   rating = "",
   sort = "popularity.desc",
   provider = null,
+  free = false,
   withMeta = false,
 } = {}) => {
   try {
@@ -311,9 +328,14 @@ export const discoverMedia = async ({
     } else if (provider) {
       params.set("provider", String(provider));
     }
+    if (free) {
+      params.set("free", "true");
+    }
 
     const data = await safeFetchJson(`${BASE_URL}/discover?${params.toString()}`);
-    const items = (data.results || []).map((i) => normalizeMediaItem(i, type));
+    const items = (data.results || []).map((i) =>
+      normalizeMediaItem(i, type === "movie" ? "movie" : "tv")
+    );
     if (withMeta) {
       return {
         results: items,

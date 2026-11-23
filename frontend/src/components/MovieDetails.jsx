@@ -4,7 +4,6 @@ import {
   ArrowLeft,
   Star,
   Heart,
-  Play,
   Share2,
   Clock,
   Tv,
@@ -29,6 +28,7 @@ import {
 } from '../services/api';
 import MovieCard from './MovieCard';
 import TrailerPreviewCard from './TrailerPreviewCard';
+import HorizontalDragRail from './HorizontalDragRail';
 import { DetailsSkeleton, EpisodeSkeleton } from './Skeletons';
 import {
   isFavorite,
@@ -153,7 +153,6 @@ export default function MovieDetails({ mediaType = 'tv' }) {
   const [loading, setLoading] = useState(!prefill);
   const [favorited, setFavorited] = useState(false);
   const [isExiting, setIsExiting] = useState(false);
-  const trailerCardRef = useRef(null);
 
   // Episódios (Séries)
   const [selectedSeason, setSelectedSeason] = useState(null);
@@ -368,7 +367,7 @@ export default function MovieDetails({ mediaType = 'tv' }) {
     );
   }
 
-  const backdropUrl = getBackdropUrl(item.backdrop_path || item.poster_path);
+  const backdropUrl = getBackdropUrl(item.backdrop_path || item.poster_path, 'w1280');
   const posterUrl = getPosterUrl(item.poster_path);
   const ytVideos = (item.videos?.results || []).filter((v) => v.site === 'YouTube');
   const watchProvidersBR = item['watch/providers']?.results?.BR;
@@ -378,7 +377,7 @@ export default function MovieDetails({ mediaType = 'tv' }) {
     watchLinks
   );
 
-  const castList = item.credits?.cast?.slice(0, 12) || [];
+  const castList = item.credits?.cast?.slice(0, 20) || [];
   const director = item.credits?.crew?.find((c) => c.job === 'Director');
   const recommendations = item.recommendations?.results || [];
   const communityReviews = item.reviews?.results || [];
@@ -425,81 +424,71 @@ export default function MovieDetails({ mediaType = 'tv' }) {
           </button>
         </div>
 
-        {/* Botão Play Translúcido Centralizado sobre a Cena */}
-        <div
-          className={`relative z-10 flex items-center justify-center my-auto py-8 transition-all duration-300 ${
-            isExiting ? 'opacity-0 scale-90' : 'opacity-100 scale-100 animate-fade-in'
-          }`}
-        >
-          <button
-            type="button"
-            onClick={() => trailerCardRef.current?.openFullscreen()}
-            aria-label={`Assistir trailer de ${item.displayTitle}`}
-            className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-white/20 hover:bg-white/30 backdrop-blur-xl border border-white/30 text-white flex items-center justify-center shadow-2xl transition-all hover:scale-105 active:scale-95"
-          >
-            <Play className="w-7 h-7 sm:w-8 sm:h-8 fill-current ml-1" />
-          </button>
-        </div>
-
         {/* Faixa de Episódios sobre a base do backdrop (sobe ao entrar, desce ao sair) */}
         {mediaType === 'tv' && item.seasons?.length > 0 && (
           <div
-            className={`relative z-20 container mx-auto px-5 sm:px-8 lg:px-14 ${
+            className={`relative z-20 container mx-auto px-5 sm:px-8 lg:px-14 mt-auto pt-12 ${
               isExiting ? 'animate-sheet-out' : 'animate-sheet-in'
             }`}
           >
-            <div className="flex items-center gap-4 mb-3">
-              <h2 className="text-base sm:text-lg font-medium text-white">Episódios</h2>
-
-              <div className="relative" ref={seasonRef}>
-                <button
-                  type="button"
-                  onClick={() => setIsSeasonOpen((v) => !v)}
-                  className="inline-flex items-center gap-1.5 text-xs font-medium text-white/75 hover:text-white bg-black/40 backdrop-blur-md border border-white/15 px-3 py-1.5 rounded-lg transition-all"
-                >
-                  <span>{seasonDropdownLabel}</span>
-                  <ChevronDown
-                    className={`w-3.5 h-3.5 transition-transform ${
-                      isSeasonOpen ? 'rotate-180' : ''
-                    }`}
-                  />
-                </button>
-
-                {isSeasonOpen && (
-                  <div className="absolute left-0 mt-2 w-56 bg-[#111115]/98 backdrop-blur-2xl border border-white/[0.12] rounded-xl shadow-2xl overflow-hidden py-1.5 max-h-60 overflow-y-auto custom-scrollbar z-50 animate-fade-in">
-                    {item.seasons
-                      .filter((s) => s.season_number > 0)
-                      .map((season) => (
-                        <button
-                          key={season.id}
-                          onClick={() => {
-                            setSelectedSeason(season.season_number);
-                            setIsSeasonOpen(false);
-                          }}
-                          className={`w-full text-left px-4 py-2 text-xs font-medium transition-colors ${
-                            selectedSeason === season.season_number
-                              ? 'bg-white text-[#09090B] font-semibold'
-                              : 'text-white/80 hover:bg-white/[0.08]'
-                          }`}
-                        >
-                          {season.name} ({season.episode_count} eps)
-                        </button>
-                      ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
             {loadingEpisodes ? (
-              <EpisodeSkeleton count={5} />
+              <>
+                <div className="flex items-center gap-4 mb-3">
+                  <h2 className="text-base sm:text-lg font-medium text-white">Episódios</h2>
+                </div>
+                <EpisodeSkeleton count={5} />
+              </>
             ) : (
-              <div className="flex overflow-x-auto overflow-y-hidden gap-3 pb-2 hide-scrollbar snap-x">
+              <HorizontalDragRail
+                title="Episódios"
+                showEdges={false}
+                railClassName="gap-3 pb-2"
+                headerExtra={
+                  <div className="relative" ref={seasonRef}>
+                    <button
+                      type="button"
+                      onClick={() => setIsSeasonOpen((v) => !v)}
+                      className="inline-flex items-center gap-1.5 text-xs font-medium text-white/75 hover:text-white bg-black/40 backdrop-blur-md border border-white/15 px-3 py-1.5 rounded-lg transition-all"
+                    >
+                      <span>{seasonDropdownLabel}</span>
+                      <ChevronDown
+                        className={`w-3.5 h-3.5 transition-transform ${
+                          isSeasonOpen ? 'rotate-180' : ''
+                        }`}
+                      />
+                    </button>
+
+                    {isSeasonOpen && (
+                      <div className="absolute left-0 mt-2 w-56 bg-[#111115]/98 backdrop-blur-2xl border border-white/[0.12] rounded-xl shadow-2xl overflow-hidden py-1.5 max-h-60 overflow-y-auto custom-scrollbar z-50 animate-fade-in">
+                        {item.seasons
+                          .filter((s) => s.season_number > 0)
+                          .map((season) => (
+                            <button
+                              key={season.id}
+                              onClick={() => {
+                                setSelectedSeason(season.season_number);
+                                setIsSeasonOpen(false);
+                              }}
+                              className={`w-full text-left px-4 py-2 text-xs font-medium transition-colors ${
+                                selectedSeason === season.season_number
+                                  ? 'bg-white text-[#09090B] font-semibold'
+                                  : 'text-white/80 hover:bg-white/[0.08]'
+                              }`}
+                            >
+                              {season.name} ({season.episode_count} eps)
+                            </button>
+                          ))}
+                      </div>
+                    )}
+                  </div>
+                }
+              >
                 {episodes.map((ep) => {
                   const isUnreleased = !ep.air_date || new Date(ep.air_date) > new Date();
                   return (
                     <div
                       key={ep.id}
-                      className={`snap-start flex-shrink-0 w-48 sm:w-56 aspect-video relative rounded-xl overflow-hidden bg-black/50 border border-white/15 group ${
+                      className={`flex-shrink-0 w-48 sm:w-56 aspect-video relative rounded-xl overflow-hidden bg-black/50 border border-white/15 group ${
                         isUnreleased ? 'opacity-55 grayscale-[40%]' : ''
                       }`}
                     >
@@ -507,7 +496,8 @@ export default function MovieDetails({ mediaType = 'tv' }) {
                         <img
                           src={`${IMAGE_BASE}/w500${ep.still_path}`}
                           alt={ep.name}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                          draggable={false}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 pointer-events-none"
                           loading="lazy"
                         />
                       ) : (
@@ -533,7 +523,7 @@ export default function MovieDetails({ mediaType = 'tv' }) {
                     </div>
                   );
                 })}
-              </div>
+              </HorizontalDragRail>
             )}
           </div>
         )}
@@ -674,7 +664,13 @@ export default function MovieDetails({ mediaType = 'tv' }) {
                     <span className="block text-white/40 uppercase tracking-wider text-[10px]">
                       Direção
                     </span>
-                    <span className="font-medium text-white/90">{director.name}</span>
+                    <Link
+                      to={`/artista/${director.id}`}
+                      state={{ personPrefill: director }}
+                      className="font-medium text-white/90 hover:text-white underline decoration-white/20 hover:decoration-white underline-offset-4 transition-colors"
+                    >
+                      {director.name}
+                    </Link>
                   </div>
                 )}
                 {budgetLabel && (
@@ -705,11 +701,12 @@ export default function MovieDetails({ mediaType = 'tv' }) {
 
           {/* Direita: Player único persistente (prévia -> tela cheia sem recarregar!) */}
           <TrailerPreviewCard
-            ref={trailerCardRef}
             mediaId={item.id}
             mediaType={mediaType}
             title={item.displayTitle}
             backdropPath={item.backdrop_path || item.poster_path}
+            previewImagePath={item.preview_backdrop_path || null}
+            avoidSameAsHero
             initialTrailerKey={ytVideos[0]?.key || item.trailer_key || null}
             preloadedVideos={ytVideos}
             paused={isExiting}
@@ -765,22 +762,25 @@ export default function MovieDetails({ mediaType = 'tv' }) {
         )}
 
         {/* ================================================================ */}
-        {/* ELENCO EM CARDS VERTICAIS 3:4 (EXATAMENTE COMO FRAME 00:12!)     */}
+        {/* ELENCO EM CARDS VERTICAIS 3:4 COM ARRASTO LATERAL + SETAS        */}
         {/* ================================================================ */}
         {castList.length > 0 && (
           <section>
-            <h2 className="text-lg sm:text-xl font-medium text-white mb-5">Elenco</h2>
-            <div className="flex overflow-x-auto overflow-y-hidden gap-4 pt-2 pb-4 hide-scrollbar snap-x">
+            <HorizontalDragRail title="Elenco" railClassName="gap-4 pt-1 pb-4">
               {castList.map((actor) => (
-                <div
+                <Link
                   key={actor.id}
-                  className="snap-start flex-shrink-0 w-36 sm:w-44 aspect-[3/4] relative rounded-2xl overflow-hidden bg-white/[0.04] border border-white/[0.08] group"
+                  to={`/artista/${actor.id}`}
+                  state={{ personPrefill: actor }}
+                  draggable={false}
+                  className="flex-shrink-0 w-36 sm:w-44 aspect-[3/4] relative rounded-2xl overflow-hidden bg-white/[0.04] border border-white/[0.08] hover:border-white/30 transition-all duration-300 group"
                 >
                   {actor.profile_path ? (
                     <img
                       src={`${IMAGE_BASE}/w300${actor.profile_path}`}
                       alt={actor.name}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      draggable={false}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 pointer-events-none"
                       loading="lazy"
                     />
                   ) : (
@@ -790,16 +790,16 @@ export default function MovieDetails({ mediaType = 'tv' }) {
                   )}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
                   <div className="absolute bottom-3 inset-x-3">
-                    <p className="text-sm font-medium text-white leading-tight line-clamp-2">
+                    <p className="text-sm font-medium text-white leading-tight line-clamp-2 group-hover:text-white">
                       {actor.name}
                     </p>
                     <p className="text-[11px] text-white/55 truncate mt-0.5">
                       {actor.character}
                     </p>
                   </div>
-                </div>
+                </Link>
               ))}
-            </div>
+            </HorizontalDragRail>
           </section>
         )}
 

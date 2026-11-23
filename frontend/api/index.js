@@ -2,6 +2,7 @@ import express from 'express';
 import axios from 'axios';
 import cors from 'cors';
 import 'dotenv/config';
+import { openApiSpec } from './openapi.js';
 
 const app = express();
 
@@ -187,9 +188,56 @@ const isSafeHttpsUrl = (raw) => {
   }
 };
 
-// Verifica presença da API_KEY antes de bater no TMDB (exceto rota independente Watchmode)
+// Documentação interativa OpenAPI / Swagger UI (não exige API_KEY para visualizar o contrato)
+app.get('/api/openapi.json', (_req, res) => {
+  res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=7200');
+  return res.json(openApiSpec);
+});
+
+app.get('/api/docs', (_req, res) => {
+  res.setHeader(
+    'Content-Security-Policy',
+    "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: https://cdn.jsdelivr.net; connect-src 'self' https://studiofilm.vercel.app; object-src 'none'; frame-ancestors 'none'"
+  );
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  return res.send(`<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>studio API — Swagger Docs</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css" />
+  <style>
+    body { margin: 0; background: #09090B; color: #f4f4f5; }
+    .swagger-ui { filter: invert(90%) hue-rotate(180deg); }
+    .swagger-ui .topbar { display: none; }
+    .swagger-ui img { filter: invert(100%) hue-rotate(180deg); }
+  </style>
+</head>
+<body>
+  <div id="swagger-ui"></div>
+  <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+  <script>
+    window.onload = () => {
+      SwaggerUIBundle({
+        url: '/api/openapi.json',
+        dom_id: '#swagger-ui',
+        deepLinking: true,
+        displayRequestDuration: true,
+      });
+    };
+  </script>
+</body>
+</html>`);
+});
+
+// Verifica presença da API_KEY antes de bater no TMDB (exceto rotas independentes)
 app.use('/api', (req, res, next) => {
-  if (req.path.startsWith('/watch-links/')) {
+  if (
+    req.path.startsWith('/watch-links/') ||
+    req.path === '/openapi.json' ||
+    req.path === '/docs'
+  ) {
     return next();
   }
   if (!API_KEY) {
@@ -280,8 +328,9 @@ app.get('/api/hero', async (req, res) => {
         const mType = item.media_type;
         try {
           const detailRes = await tmdbGet(`/${mType}/${item.id}`, {
-            append_to_response: 'watch/providers,videos',
+            append_to_response: 'watch/providers,videos,images',
             include_video_language: 'pt,en',
+            include_image_language: 'null,pt,en',
           });
           const d = detailRes.data || {};
           const brProviders = d['watch/providers']?.results?.BR || {};
@@ -299,6 +348,19 @@ app.get('/api/hero', async (req, res) => {
             return score(b) - score(a);
           });
 
+          // Escolhe uma cena alternativa (diferente do backdrop da Hero) para a capa do card de trailer
+          const altBackdrops = (d.images?.backdrops || []).filter(
+            (b) => b?.file_path && b.file_path !== item.backdrop_path && b.file_path !== d.backdrop_path
+          );
+          altBackdrops.sort((a, b) => {
+            const score = (img) =>
+              (img.iso_639_1 === null ? 10 : 0) +
+              ((img.aspect_ratio || 0) >= 1.6 ? 3 : 0) +
+              Math.min(5, Number(img.vote_average || 0) / 2);
+            return score(b) - score(a);
+          });
+          const previewBackdropPath = altBackdrops[0]?.file_path || null;
+
           return {
             ...item,
             media_type: mType,
@@ -308,6 +370,7 @@ app.get('/api/hero', async (req, res) => {
             number_of_seasons: d.number_of_seasons || null,
             primary_provider: brPrimary,
             trailer_key: ytVideos[0]?.key || null,
+            preview_backdrop_path: previewBackdropPath,
           };
         } catch {
           return { ...item, media_type: mType };
@@ -435,10 +498,13 @@ app.get('/api/movies/top_rated', async (req, res) => {
       region: 'BR',
       page,
     });
+    const acclaimed = (response.data.results || []).filter(
+      (m) => Number(m?.vote_average) >= 7.8 && Number(m?.vote_count || 0) >= 300
+    );
     setEdgeCache(res, 600);
     res.json({
       ...response.data,
-      results: attachMediaType(response.data.results, 'movie'),
+      results: attachMediaType(acclaimed, 'movie'),
     });
   } catch (error) {
     logSafeError('movies/top_rated', error);
@@ -473,6 +539,130 @@ app.get('/api/people/popular', async (req, res) => {
   } catch (error) {
     logSafeError('people/popular', error);
     res.status(502).json({ error: 'Erro ao buscar artistas em destaque' });
+  }
+});
+
+// ==========================================
+// DETALHES DE ARTISTA / ATOR (BIO + FILMOGRAFIA + FALLBACK EN)
+// ==========================================
+app.get('/api/people/:id', async (req, res) => {
+  const { id } = req.params;
+  if (!isValidId(id)) {
+    return res.status(400).json({ error: 'ID de artista inválido' });
+  }
+
+  try {
+    const response = await tmdbGet(`/person/${id}`, {
+      append_to_response: 'combined_credits,external_ids',
+    });
+    const d = response.data || {};
+
+    let biography = typeof d.biography === 'string' ? d.biography.trim() : '';
+    let biographyLang = 'pt-BR';
+
+    // Fallback automático para inglês se não houver biografia em português no TMDB
+    if (!biography) {
+      try {
+        const enRes = await tmdbGet(`/person/${id}`, { language: 'en-US' });
+        const enBio = typeof enRes.data?.biography === 'string' ? enRes.data.biography.trim() : '';
+        if (enBio) {
+          biography = enBio;
+          biographyLang = 'en-US';
+        }
+      } catch {
+        // Mantém vazio caso falhe
+      }
+    }
+
+    // Mescla e desduplica créditos (cast + crew) priorizando atuação ou cargo relevante
+    const rawCredits = [
+      ...(d.combined_credits?.cast || []).map((c) => ({
+        ...c,
+        roleLabel: c.character || '',
+        creditKind: 'cast',
+      })),
+      ...(d.combined_credits?.crew || []).map((c) => ({
+        ...c,
+        roleLabel: c.job || c.department || '',
+        creditKind: 'crew',
+      })),
+    ];
+
+    const byKey = new Map();
+    for (const item of rawCredits) {
+      if (!item || !item.id || item.adult) continue;
+      const mType = item.media_type === 'movie' ? 'movie' : item.media_type === 'tv' ? 'tv' : null;
+      if (!mType) continue;
+      const title = item.title || item.name || '';
+      if (!title) continue;
+
+      const key = `${mType}-${item.id}`;
+      const existing = byKey.get(key);
+      if (!existing) {
+        byKey.set(key, {
+          id: item.id,
+          media_type: mType,
+          title: item.title || null,
+          name: item.name || null,
+          poster_path: item.poster_path || null,
+          backdrop_path: item.backdrop_path || null,
+          vote_average: Number(item.vote_average || 0),
+          vote_count: Number(item.vote_count || 0),
+          popularity: Number(item.popularity || 0),
+          release_date: item.release_date || null,
+          first_air_date: item.first_air_date || null,
+          overview: item.overview || '',
+          genre_ids: Array.isArray(item.genre_ids) ? item.genre_ids : [],
+          role: item.roleLabel,
+          credit_kind: item.creditKind,
+        });
+      } else if (!existing.role && item.roleLabel) {
+        existing.role = item.roleLabel;
+      }
+    }
+
+    const credits = Array.from(byKey.values());
+    const knownFor = [...credits]
+      .filter((c) => c.poster_path || c.backdrop_path)
+      .sort((a, b) => {
+        const score = (x) =>
+          (x.popularity || 0) * 1.4 +
+          Math.min(250, Math.sqrt(x.vote_count || 0) * 4) +
+          (x.vote_average || 0) * 5;
+        return score(b) - score(a);
+      })
+      .slice(0, 8);
+
+    const external = d.external_ids || {};
+    setEdgeCache(res, 900);
+    return res.json({
+      id: d.id,
+      name: d.name || '',
+      profile_path: d.profile_path || null,
+      known_for_department: d.known_for_department || 'Acting',
+      biography,
+      biography_lang: biographyLang,
+      birthday: d.birthday || null,
+      deathday: d.deathday || null,
+      place_of_birth: d.place_of_birth || null,
+      popularity: d.popularity || 0,
+      also_known_as: Array.isArray(d.also_known_as) ? d.also_known_as.slice(0, 4) : [],
+      external_ids: {
+        imdb_id: typeof external.imdb_id === 'string' && /^nm\d+$/.test(external.imdb_id)
+          ? external.imdb_id
+          : null,
+        instagram_id:
+          typeof external.instagram_id === 'string' && /^[a-zA-Z0-9._]{1,40}$/.test(external.instagram_id)
+            ? external.instagram_id
+            : null,
+      },
+      known_for: knownFor,
+      credits,
+    });
+  } catch (error) {
+    logSafeError('people/:id', error);
+    const status = error?.response?.status === 404 ? 404 : 502;
+    return res.status(status).json({ error: 'Erro ao buscar os detalhes do artista' });
   }
 });
 
@@ -555,14 +745,27 @@ app.get('/api/watch-links/:type/:id', async (req, res) => {
 // ==========================================
 const fetchDetailsWithReviews = async (mediaType, id) => {
   const response = await tmdbGet(`/${mediaType}/${id}`, {
-    append_to_response: 'credits,videos,recommendations,watch/providers,reviews',
+    append_to_response: 'credits,videos,recommendations,watch/providers,reviews,images',
     include_video_language: 'pt,en',
+    include_image_language: 'null,pt,en',
   });
 
   const data = {
     ...response.data,
     media_type: mediaType,
   };
+
+  const altBackdrops = (data.images?.backdrops || []).filter(
+    (b) => b?.file_path && b.file_path !== data.backdrop_path
+  );
+  altBackdrops.sort((a, b) => {
+    const score = (img) =>
+      (img.iso_639_1 === null ? 10 : 0) +
+      ((img.aspect_ratio || 0) >= 1.6 ? 3 : 0) +
+      Math.min(5, Number(img.vote_average || 0) / 2);
+    return score(b) - score(a);
+  });
+  data.preview_backdrop_path = altBackdrops[0]?.file_path || null;
 
   if (data.recommendations?.results) {
     data.recommendations.results = attachMediaType(data.recommendations.results, mediaType);
@@ -701,17 +904,36 @@ app.get('/api/search', async (req, res) => {
 });
 
 // ==========================================
-// GÊNEROS (TV / MOVIE)
+// GÊNEROS (ALL / TV / MOVIE)
 // ==========================================
 app.get('/api/genres', async (req, res) => {
-  const type = req.query.type === 'movie' ? 'movie' : 'tv';
+  const type = req.query.type === 'movie' ? 'movie' : req.query.type === 'all' ? 'all' : 'tv';
   try {
+    if (type === 'all') {
+      const [movRes, tvRes] = await Promise.all([
+        tmdbGet('/genre/movie/list'),
+        tmdbGet('/genre/tv/list'),
+      ]);
+      const byName = new Map();
+      for (const g of [...(movRes.data.genres || []), ...(tvRes.data.genres || [])]) {
+        const key = String(g.name || '').trim().toLowerCase();
+        if (key && !byName.has(key)) {
+          byName.set(key, g);
+        }
+      }
+      const merged = Array.from(byName.values()).sort((a, b) =>
+        a.name.localeCompare(b.name, 'pt-BR')
+      );
+      setEdgeCache(res, 86400);
+      return res.json({ genres: merged });
+    }
+
     const response = await tmdbGet(`/genre/${type}/list`);
     setEdgeCache(res, 86400);
-    res.json(response.data);
+    return res.json(response.data);
   } catch (error) {
     logSafeError('genres', error);
-    res.status(502).json({ error: 'Erro ao buscar gêneros' });
+    return res.status(502).json({ error: 'Erro ao buscar gêneros' });
   }
 });
 
@@ -740,81 +962,122 @@ app.get('/api/providers', async (req, res) => {
   }
 });
 
+// Mapeamento de equivalência de gêneros entre Filmes e Séries no TMDB (usado em type=all)
+const MOVIE_TO_TV_GENRE = {
+  28: '10759', // Ação -> Action & Adventure
+  12: '10759', // Aventura -> Action & Adventure
+  878: '10765', // Ficção Científica -> Sci-Fi & Fantasy
+  14: '10765', // Fantasia -> Sci-Fi & Fantasy
+  10752: '10768', // Guerra -> War & Politics
+};
+const TV_TO_MOVIE_GENRE = {
+  10759: '28',
+  10765: '878',
+  10768: '10752',
+};
+
+const mapGenresForMediaType = (rawGenre, targetType) => {
+  const sep = rawGenre.includes('|') ? '|' : ',';
+  const map = targetType === 'tv' ? MOVIE_TO_TV_GENRE : TV_TO_MOVIE_GENRE;
+  const ids = Array.from(
+    new Set(
+      rawGenre
+        .split(/[|,]/)
+        .map((id) => map[id] || id)
+        .filter(Boolean)
+    )
+  );
+  return ids.join(sep);
+};
+
 // ==========================================
-// DISCOVER AVANÇADO
+// DISCOVER AVANÇADO (ALL / MOVIE / TV + GRÁTIS BR)
 // ==========================================
 app.get('/api/discover', async (req, res) => {
-  const type = req.query.type === 'movie' ? 'movie' : 'tv';
+  const requestedType =
+    req.query.type === 'movie' ? 'movie' : req.query.type === 'all' ? 'all' : 'tv';
   const page = parsePage(req.query.page);
+  const isFreeOnly = req.query.free === 'true' || req.query.free === '1';
 
-  const rawSort = typeof req.query.sort === 'string' && ALLOWED_SORTS.has(req.query.sort)
-    ? req.query.sort
-    : 'popularity.desc';
-
-  let mappedSort = rawSort;
-  if (type === 'movie' && mappedSort === 'first_air_date.desc') {
-    mappedSort = 'primary_release_date.desc';
-  } else if (type === 'tv' && mappedSort === 'primary_release_date.desc') {
-    mappedSort = 'first_air_date.desc';
-  }
-
-  const params = {
-    include_adult: false,
-    sort_by: mappedSort,
-    page,
-  };
+  const rawSort =
+    typeof req.query.sort === 'string' && ALLOWED_SORTS.has(req.query.sort)
+      ? req.query.sort
+      : 'popularity.desc';
 
   const hasGenre = typeof req.query.genre === 'string' && GENRE_REGEX.test(req.query.genre);
   const hasProvider =
     typeof req.query.provider === 'string' && PROVIDER_REGEX.test(req.query.provider);
-
-  if (hasGenre) {
-    params.with_genres = req.query.genre;
-  }
-
-  const dateField = type === 'movie' ? 'primary_release_date' : 'first_air_date';
-  if (typeof req.query.year === 'string' && YEAR_REGEX.test(req.query.year)) {
-    if (type === 'movie') {
-      params.primary_release_year = req.query.year;
-    } else {
-      params.first_air_date_year = req.query.year;
-    }
-  } else {
-    if (typeof req.query.yearFrom === 'string' && YEAR_REGEX.test(req.query.yearFrom)) {
-      params[`${dateField}.gte`] = `${req.query.yearFrom}-01-01`;
-    }
-    if (typeof req.query.yearTo === 'string' && YEAR_REGEX.test(req.query.yearTo)) {
-      params[`${dateField}.lte`] = `${req.query.yearTo}-12-31`;
-    }
-  }
-
   const parsedRating = Number(req.query.rating);
-  if (Number.isFinite(parsedRating) && parsedRating > 0 && parsedRating <= 10) {
-    params['vote_average.gte'] = parsedRating;
-    params['vote_count.gte'] = hasProvider || hasGenre ? 40 : 120;
-  } else if (mappedSort === 'vote_average.desc') {
-    params['vote_count.gte'] = hasProvider || hasGenre ? 80 : 300;
-  }
+  const hasRating = Number.isFinite(parsedRating) && parsedRating > 0 && parsedRating <= 10;
 
-  if (mappedSort === 'primary_release_date.desc' || mappedSort === 'first_air_date.desc') {
-    const today = new Date().toISOString().split('T')[0];
-    if (!params[`${dateField}.lte`] || params[`${dateField}.lte`] > today) {
-      params[`${dateField}.lte`] = today;
+  const fetchSingleDiscover = async (mediaType) => {
+    let mappedSort = rawSort;
+    if (mediaType === 'movie' && mappedSort === 'first_air_date.desc') {
+      mappedSort = 'primary_release_date.desc';
+    } else if (mediaType === 'tv' && mappedSort === 'primary_release_date.desc') {
+      mappedSort = 'first_air_date.desc';
     }
-    if (!params['vote_count.gte']) {
-      params['vote_count.gte'] = 20;
+
+    const params = {
+      include_adult: false,
+      sort_by: mappedSort,
+      page,
+    };
+
+    if (hasGenre) {
+      params.with_genres =
+        requestedType === 'all'
+          ? mapGenresForMediaType(req.query.genre, mediaType)
+          : req.query.genre;
     }
-  }
 
-  if (hasProvider) {
-    // Normaliza separador para "|" (OR no TMDB: está em QUALQUER um dos streamings escolhidos)
-    params.with_watch_providers = req.query.provider.replace(/,/g, '|');
-    params.watch_region = 'BR';
-    params.with_watch_monetization_types = 'flatrate|free|ads';
-  }
+    const dateField = mediaType === 'movie' ? 'primary_release_date' : 'first_air_date';
+    if (typeof req.query.year === 'string' && YEAR_REGEX.test(req.query.year)) {
+      if (mediaType === 'movie') {
+        params.primary_release_year = req.query.year;
+      } else {
+        params.first_air_date_year = req.query.year;
+      }
+    } else {
+      if (typeof req.query.yearFrom === 'string' && YEAR_REGEX.test(req.query.yearFrom)) {
+        params[`${dateField}.gte`] = `${req.query.yearFrom}-01-01`;
+      }
+      if (typeof req.query.yearTo === 'string' && YEAR_REGEX.test(req.query.yearTo)) {
+        params[`${dateField}.lte`] = `${req.query.yearTo}-12-31`;
+      }
+    }
 
-  try {
-    let response = await tmdbGet(`/discover/${type}`, params);
+    if (hasRating) {
+      params['vote_average.gte'] = parsedRating;
+      params['vote_count.gte'] = hasProvider || hasGenre || isFreeOnly ? 30 : 100;
+    } else if (mappedSort === 'vote_average.desc') {
+      params['vote_count.gte'] = hasProvider || hasGenre || isFreeOnly ? 60 : 250;
+    }
+
+    if (mappedSort === 'primary_release_date.desc' || mappedSort === 'first_air_date.desc') {
+      const today = new Date().toISOString().split('T')[0];
+      if (!params[`${dateField}.lte`] || params[`${dateField}.lte`] > today) {
+        params[`${dateField}.lte`] = today;
+      }
+      if (!params['vote_count.gte']) {
+        params['vote_count.gte'] = 20;
+      }
+    }
+
+    if (isFreeOnly) {
+      params.watch_region = 'BR';
+      params.with_watch_monetization_types = 'free|ads';
+      if (hasProvider) {
+        params.with_watch_providers = req.query.provider.replace(/,/g, '|');
+      }
+    } else if (hasProvider) {
+      // Normaliza separador para "|" (OR no TMDB: está em QUALQUER um dos streamings escolhidos)
+      params.with_watch_providers = req.query.provider.replace(/,/g, '|');
+      params.watch_region = 'BR';
+      params.with_watch_monetization_types = 'flatrate|free|ads';
+    }
+
+    let response = await tmdbGet(`/discover/${mediaType}`, params);
 
     // Se combinou múltiplos gêneros com AND (",") e não houve resultado, tenta automaticamente com OR ("|")
     if (
@@ -822,20 +1085,53 @@ app.get('/api/discover', async (req, res) => {
       hasGenre &&
       params.with_genres.includes(',')
     ) {
-      response = await tmdbGet(`/discover/${type}`, {
+      response = await tmdbGet(`/discover/${mediaType}`, {
         ...params,
         with_genres: params.with_genres.replace(/,/g, '|'),
       });
     }
 
-    setEdgeCache(res, 300);
-    res.json({
+    return {
       ...response.data,
-      results: attachMediaType(response.data.results, type),
-    });
+      results: attachMediaType(response.data.results || [], mediaType),
+    };
+  };
+
+  try {
+    if (requestedType === 'all') {
+      const [movieData, tvData] = await Promise.all([
+        fetchSingleDiscover('movie'),
+        fetchSingleDiscover('tv'),
+      ]);
+
+      const merged = [...movieData.results, ...tvData.results];
+      merged.sort((a, b) => {
+        if (rawSort === 'vote_average.desc') {
+          return (b.vote_average || 0) - (a.vote_average || 0);
+        }
+        if (rawSort === 'primary_release_date.desc' || rawSort === 'first_air_date.desc') {
+          const da = String(a.release_date || a.first_air_date || '');
+          const db = String(b.release_date || b.first_air_date || '');
+          return db.localeCompare(da);
+        }
+        return (b.popularity || 0) - (a.popularity || 0);
+      });
+
+      setEdgeCache(res, 300);
+      return res.json({
+        page,
+        results: merged,
+        total_results: (movieData.total_results || 0) + (tvData.total_results || 0),
+        total_pages: Math.max(movieData.total_pages || 1, tvData.total_pages || 1),
+      });
+    }
+
+    const single = await fetchSingleDiscover(requestedType);
+    setEdgeCache(res, 300);
+    return res.json(single);
   } catch (error) {
     logSafeError('discover', error);
-    res.status(502).json({ error: 'Erro no discover' });
+    return res.status(502).json({ error: 'Erro no discover' });
   }
 });
 

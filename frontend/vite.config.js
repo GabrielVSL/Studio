@@ -23,12 +23,25 @@ const localStudioApiPlugin = (env, frontendRoot) => ({
       process.env.WATCHMODE_API_KEY = env.WATCHMODE_API_KEY;
     }
 
-    const apiEntryUrl = pathToFileURL(path.resolve(frontendRoot, 'api/index.js')).href;
-    const { default: apiApp } = await import(apiEntryUrl);
+    const apiFilePath = path.resolve(frontendRoot, 'api/index.js');
+    const apiEntryUrl = pathToFileURL(apiFilePath).href;
+    let currentApiApp = (await import(apiEntryUrl)).default;
+
+    // Recarrega automaticamente api/index.js quando houver alterações em dev
+    server.watcher.on('change', async (changedFile) => {
+      if (path.resolve(changedFile) === apiFilePath) {
+        try {
+          const fresh = await import(`${apiEntryUrl}?t=${Date.now()}`);
+          if (fresh?.default) currentApiApp = fresh.default;
+        } catch (err) {
+          console.error('[studio-local-api] Erro ao recarregar api/index.js:', err);
+        }
+      }
+    });
 
     server.middlewares.use((req, res, next) => {
       if (req.url && req.url.startsWith('/api')) {
-        return apiApp(req, res, next);
+        return currentApiApp(req, res, next);
       }
       return next();
     });

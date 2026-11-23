@@ -1,34 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import {
-  Search,
-  Menu,
-  X,
-  ArrowRight,
-  Dices,
-  Flame,
-  Rocket,
-  VenetianMask,
-  Laugh,
-  Eye,
-  Skull,
-  Sparkles,
-  Heart,
-} from 'lucide-react';
+import { Search, Menu, X, Dices, ArrowUpRight } from 'lucide-react';
 import { getFavorites } from '../utils/storage';
 
-const MENU_GENRES = [
-  { id: 28, name: 'Ação', icon: Flame },
-  { id: 878, name: 'Ficção', icon: Rocket },
-  { id: 18, name: 'Drama', icon: VenetianMask },
-  { id: 35, name: 'Comédia', icon: Laugh },
-  { id: 53, name: 'Suspense', icon: Eye },
-  { id: 27, name: 'Terror', icon: Skull },
-  { id: 16, name: 'Animação', icon: Sparkles },
-  { id: 10749, name: 'Romance', icon: Heart },
+const NAV_ITEMS = [
+  { label: 'Início', to: '/', match: (path) => path === '/' },
+  {
+    label: 'Explorar',
+    to: '/explorar',
+    match: (path) => path === '/explorar' || path === '/explorer',
+  },
+  {
+    label: 'Minha Lista',
+    to: '/minha-lista',
+    match: (path) => path === '/minha-lista',
+    showFavBadge: true,
+  },
 ];
 
-export default function Header({ onOpenSurprise, onOpenSearch }) {
+export default function Header({ searchOpen = false, onOpenSurprise, onOpenSearch }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [playerOpen, setPlayerOpen] = useState(false);
   const [favCount, setFavCount] = useState(0);
@@ -106,13 +96,16 @@ export default function Header({ onOpenSurprise, onOpenSearch }) {
           {/* Direita: Busca translúcida discreta + Botão quadrado branco Menu */}
           <div className="flex items-center gap-3">
             <button
+              id="studio-search-trigger"
               type="button"
               onClick={() => {
                 closeMenu();
                 onOpenSearch?.();
               }}
               aria-label="Buscar filmes e séries"
-              className="group flex items-center gap-2.5 h-10 px-3.5 sm:w-52 rounded-xl bg-white/[0.09] hover:bg-white/[0.15] backdrop-blur-xl border border-white/[0.14] text-xs text-white/65 hover:text-white transition-all"
+              className={`group flex items-center gap-2.5 h-10 px-3.5 sm:w-52 rounded-xl bg-white/[0.09] hover:bg-white/[0.15] backdrop-blur-xl border border-white/[0.14] text-xs text-white/65 hover:text-white transition-all duration-200 ${
+                searchOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'
+              }`}
             >
               <Search className="w-4 h-4 text-white/70 flex-shrink-0" />
               <span className="hidden sm:inline flex-1 text-left">Buscar</span>
@@ -135,7 +128,7 @@ export default function Header({ onOpenSurprise, onOpenSearch }) {
       </header>
 
       {/* ================================================================ */}
-      {/* MENU OVERLAY EDITORIAL (ESTILO MON 00:19–00:21)                  */}
+      {/* MENU OVERLAY EDITORIAL — ZERO REDUNDÂNCIA                        */}
       {/* ================================================================ */}
       {menuOpen && (
         <div
@@ -146,119 +139,84 @@ export default function Header({ onOpenSurprise, onOpenSearch }) {
             className="bg-[#0B0B0E]/98 border-b border-white/[0.09] shadow-[0_30px_80px_rgba(0,0,0,0.9)] animate-mon-menu"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="container mx-auto px-5 sm:px-8 lg:px-14 py-9 sm:py-12 space-y-10">
-              {/* Linha principal: Tipografia editorial grande + coluna secundária */}
-              <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-8">
-                <nav className="flex flex-wrap items-center gap-x-9 gap-y-4">
-                  {[
-                    { label: 'Início', to: '/' },
-                    { label: 'Em Alta', to: '/explorar?tipo=movie' },
-                    {
-                      label: 'Melhores Avaliados',
-                      to: '/explorar?tipo=movie&sort=vote_average.desc',
-                    },
-                    { label: 'Populares', to: '/explorar?tipo=tv' },
-                  ].map((item) => {
-                    const active =
-                      item.to === '/' && location.pathname === '/';
+            <div className="container mx-auto px-5 sm:px-8 lg:px-14 py-9 sm:py-11">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-8">
+                {/* Navegação principal: 1 destino real por link */}
+                <nav
+                  aria-label="Navegação principal"
+                  className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-y-4 sm:gap-x-11"
+                >
+                  {NAV_ITEMS.map((item) => {
+                    const active = item.match(location.pathname);
                     return (
                       <Link
-                        key={item.label}
+                        key={item.to}
                         to={item.to}
                         onClick={closeMenu}
-                        className={`text-2xl sm:text-4xl font-light tracking-tight transition-colors ${
-                          active
-                            ? 'text-white'
-                            : 'text-white/75 hover:text-white'
+                        className={`group inline-flex items-center gap-3 text-2xl sm:text-4xl font-light tracking-tight transition-colors ${
+                          active ? 'text-white font-normal' : 'text-white/60 hover:text-white'
                         }`}
                       >
-                        {item.label}
+                        <span
+                          className={`w-2 h-2 rounded-full transition-all ${
+                            active
+                              ? 'bg-[#FE3131] scale-100'
+                              : 'bg-white/20 scale-75 opacity-0 group-hover:opacity-100'
+                          }`}
+                        />
+                        <span>{item.label}</span>
+                        {item.showFavBadge && favCount > 0 && (
+                          <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-white text-[#09090B] tracking-normal">
+                            {favCount}
+                          </span>
+                        )}
                       </Link>
                     );
                   })}
                 </nav>
 
-                <div className="flex flex-wrap lg:flex-col gap-x-6 gap-y-2.5 lg:min-w-[190px] text-sm">
-                  <Link
-                    to="/explorar?tipo=movie"
-                    onClick={closeMenu}
-                    className="text-white/60 hover:text-white transition-colors"
-                  >
-                    Filmes
-                  </Link>
-                  <Link
-                    to="/explorar?tipo=tv"
-                    onClick={closeMenu}
-                    className="text-white/60 hover:text-white transition-colors"
-                  >
-                    Séries
-                  </Link>
-                  <Link
-                    to="/explorar"
-                    onClick={closeMenu}
-                    className="text-white/60 hover:text-white transition-colors"
-                  >
-                    Onde Assistir (BR)
-                  </Link>
-                  <Link
-                    to="/minha-lista"
-                    onClick={closeMenu}
-                    className="text-white/60 hover:text-white transition-colors inline-flex items-center gap-2"
-                  >
-                    Minha Lista
-                    {favCount > 0 && (
-                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white text-[#09090B]">
-                        {favCount}
+                {/* Ação de descoberta distinta: Roleta Surpreenda-me */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    closeMenu();
+                    onOpenSurprise?.();
+                  }}
+                  className="group w-full sm:w-auto lg:w-80 text-left p-4 rounded-2xl bg-white/[0.04] hover:bg-white/[0.09] border border-white/[0.09] hover:border-white/25 transition-all flex items-center justify-between gap-4"
+                >
+                  <div className="flex items-center gap-3.5 min-w-0">
+                    <span className="w-10 h-10 rounded-xl bg-amber-400/15 border border-amber-400/25 text-amber-300 flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform">
+                      <Dices className="w-5 h-5" />
+                    </span>
+                    <div className="min-w-0">
+                      <span className="block text-sm font-semibold text-white">
+                        Surpreenda-me
                       </span>
-                    )}
-                  </Link>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      closeMenu();
-                      onOpenSurprise?.();
-                    }}
-                    className="text-white/80 hover:text-white transition-colors inline-flex items-center gap-1.5 text-left font-medium"
-                  >
-                    <Dices className="w-4 h-4 text-amber-400" />
-                    Surpreenda-me
-                  </button>
-                </div>
+                      <span className="block text-xs text-white/45 truncate">
+                        Sorteie um título aclamado agora
+                      </span>
+                    </div>
+                  </div>
+                  <ArrowUpRight className="w-4 h-4 text-white/40 group-hover:text-white group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all flex-shrink-0" />
+                </button>
               </div>
 
-              {/* Faixa inferior de Gêneros (como no vídeo 00:19) */}
-              <div className="pt-6 border-t border-white/[0.07]">
-                <div className="flex items-center justify-between mb-4">
-                  <span className="text-xs font-medium uppercase tracking-widest text-white/45">
-                    Gêneros de Filmes
+              {/* Barra inferior discreta de identidade & atalhos */}
+              <div className="mt-8 pt-5 border-t border-white/[0.06] flex flex-wrap items-center justify-between gap-3 text-[11px] text-white/35">
+                <span>studio • Filmes, séries e streamings no Brasil</span>
+                <div className="hidden sm:flex items-center gap-4">
+                  <span className="inline-flex items-center gap-1.5">
+                    <kbd className="px-1.5 py-0.5 rounded bg-white/[0.07] text-white/55 font-sans">
+                      /
+                    </kbd>
+                    Buscar
                   </span>
-                  <Link
-                    to="/explorar?tipo=movie"
-                    onClick={closeMenu}
-                    className="text-xs font-medium text-white/60 hover:text-white inline-flex items-center gap-1 transition-colors"
-                  >
-                    Explorar tudo
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </Link>
-                </div>
-
-                <div className="flex overflow-x-auto gap-3 pb-1 hide-scrollbar">
-                  {MENU_GENRES.map((g) => {
-                    const Icon = g.icon;
-                    return (
-                      <Link
-                        key={g.id}
-                        to={`/explorar?tipo=movie&genero=${g.id}`}
-                        onClick={closeMenu}
-                        className="group relative flex-shrink-0 w-36 sm:w-44 h-20 rounded-xl overflow-hidden bg-[#121216] hover:bg-white/[0.08] border border-white/[0.09] hover:border-white/30 p-3.5 flex flex-col justify-between transition-all"
-                      >
-                        <Icon className="w-4 h-4 text-white/45 group-hover:text-white transition-colors" />
-                        <span className="relative z-10 text-sm font-medium text-white/90 group-hover:text-white">
-                          {g.name}
-                        </span>
-                      </Link>
-                    );
-                  })}
+                  <span className="inline-flex items-center gap-1.5">
+                    <kbd className="px-1.5 py-0.5 rounded bg-white/[0.07] text-white/55 font-sans">
+                      Esc
+                    </kbd>
+                    Fechar
+                  </span>
                 </div>
               </div>
             </div>

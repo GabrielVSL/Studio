@@ -228,3 +228,68 @@
 .animate-toast {
   animation: slideUpToast 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
+
+/* Sliders minimalistas do Explorar (Ano duplo + Nota mínima) */
+.studio-range {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  pointer-events: none;
+}
+
+.studio-range::-webkit-slider-runnable-track {
+  background: transparent;
+  height: 6px;
+}
+
+.studio-range::-moz-range-track {
+  background: transparent;
+  height: 6px;
+}
+
+.studio-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  pointer-events: auto;
+  width: 18px;
+  height: 18px;
+  border-radius: 9999px;
+  background: #ffffff;
+  border: 2.5px solid #09090B;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.3);
+  cursor: grab;
+  margin-top: -6px;
+  transition: transform 140ms ease, box-shadow 140ms ease;
+}
+
+.studio-range::-webkit-slider-thumb:hover {
+  transform: scale(1.14);
+  box-shadow: 0 2px 14px rgba(255, 255, 255, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.6);
+}
+
+.studio-range::-webkit-slider-thumb:active {
+  cursor: grabbing;
+  transform: scale(1.2);
+}
+
+.studio-range::-moz-range-thumb {
+  pointer-events: auto;
+  width: 18px;
+  height: 18px;
+  border-radius: 9999px;
+  background: #ffffff;
+  border: 2.5px solid #09090B;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.3);
+  cursor: grab;
+  transition: transform 140ms ease, box-shadow 140ms ease;
+}
+
+.studio-range-amber::-webkit-slider-thumb {
+  background: #fbbf24;
+  border-color: #09090B;
+}
+
+.studio-range-amber::-moz-range-thumb {
+  background: #fbbf24;
+  border-color: #09090B;
+}

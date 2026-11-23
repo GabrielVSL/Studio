@@ -70,9 +70,28 @@ const LANG_LABELS = {
 };
 
 /**
+ * Verifica se o YT.Player e seu <iframe> ainda estão anexados ao DOM ativo.
+ * Evita o erro "The YouTube player is not attached to the DOM" do widgetapi.
+ */
+export function isYouTubePlayerAttached(player, iframeEl = null) {
+  if (!player || typeof player !== 'object') return false;
+  if (iframeEl && !iframeEl.isConnected) return false;
+  try {
+    if (typeof player.getIframe === 'function') {
+      const targetIframe = player.getIframe();
+      if (!targetIframe || !targetIframe.isConnected) return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Descobre qual módulo de legendas ('captions' ou 'cc') está disponível no player.
  */
 function getCaptionModule(player) {
+  if (!isYouTubePlayerAttached(player)) return 'captions';
   try {
     const opts = player?.getOptions?.();
     if (Array.isArray(opts)) {
@@ -89,7 +108,7 @@ function getCaptionModule(player) {
  * Normaliza a tracklist real retornada pelo YouTube em opções limpas para o menu do player.
  */
 export function extractCaptionOptions(player) {
-  if (!player || typeof player.getOption !== 'function') {
+  if (!isYouTubePlayerAttached(player) || typeof player.getOption !== 'function') {
     return { moduleName: 'captions', options: [], activeCode: 'off' };
   }
 
@@ -170,7 +189,7 @@ export function extractCaptionOptions(player) {
  * Aplica ou desativa a legenda diretamente no YT.Player usando a faixa exata da tracklist.
  */
 export function applyCaptionSelection(player, code, options = []) {
-  if (!player) return false;
+  if (!isYouTubePlayerAttached(player)) return false;
   const mod = getCaptionModule(player);
 
   try {

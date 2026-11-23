@@ -12,6 +12,7 @@ import { getBackdropUrl, getMediaVideos } from '../services/api';
 import { isValidYouTubeKey } from '../utils/security';
 import {
   loadYouTubeIframeApi,
+  isYouTubePlayerAttached,
   extractCaptionOptions,
   applyCaptionSelection,
 } from '../utils/youtubeApi';
@@ -22,6 +23,9 @@ const YT_ORIGINS = new Set([
   'https://www.youtube.com',
 ]);
 
+// Tempo mínimo de reprodução real (s) para que o título/chrome inicial do YouTube desapareça 100%
+const CHROME_CLEAR_SECONDS = 3.2;
+
 const notifyPlayerOverlay = (open) => {
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('studio:player-open', { detail: { open } }));
@@ -29,10 +33,12 @@ const notifyPlayerOverlay = (open) => {
 };
 
 /**
- * ÚNICA FONTE DE VERDADE DO TRAILER:
- * Um único <iframe> persistente começa tocando silenciosamente na prévia (canto da Hero/Detalhes),
- * expande suavemente até 100vw × 100vh + entra em tela cheia nativa após a animação,
- * e ao voltar recolhe para o cantinho continuando exatamente de onde parou!
+ * ÚNICA FONTE DE VERDADE DO TRAILER (COM PRELOAD INTELIGENTE & ZERO CHROME YOUTUBE):
+ * - Um único <iframe> persistente pode pré-carregar alguns segundos em segundo plano (standby)
+ *   e pausar com o buffer aquecido, evitando re-requisições ao trocar slides na Hero.
+ * - No modo mini, aplica crop generoso + gate de reprodução real para ocultar 100% dos
+ *   elementos nativos do YouTube (título, logo, "Mais vídeos", botão de pause).
+ * - Expande suavemente até 100vw × 100vh + tela cheia nativa e recolhe sem recarregar.
  */
 const TrailerPreviewCard = forwardRef(function TrailerPreviewCard(
   {
@@ -40,9 +46,15 @@ const TrailerPreviewCard = forwardRef(function TrailerPreviewCard(
     mediaType = 'tv',
     title = '',
     backdropPath = '',
+    previewImagePath = null,
+    avoidSameAsHero = false,
     initialTrailerKey = null,
     preloadedVideos = null,
     paused = false,
+    isActive = true,
+    shouldMountIframe = true,
+    preloadSeconds = 3.5,
+    onPrebufferReady,
     onExpandChange,
     className = '',
   },
@@ -52,6 +64,7 @@ const TrailerPreviewCard = forwardRef(function TrailerPreviewCard(
     isValidYouTubeKey(initialTrailerKey) ? initialTrailerKey : null
   );
   const [loadingVideos, setLoadingVideos] = useState(false);
+  const [thumbFailed, setThumbFailed] = useState(false);
 
   // 'mini' | 'entering' | 'expanded' | 'closing'
   const [mode, setMode] = useState('mini');
@@ -59,7 +72,8 @@ const TrailerPreviewCard = forwardRef(function TrailerPreviewCard(
 
   // Estado sincronizado do player
   const [isVideoReady, setIsVideoReady] = useState(false);
-  const [isPlaying, setIsPlaying] = useState(true);
+  const [isStandbyPaused, setIsStandbyPaused] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isMuted, setIsMuted] = useState(true);
@@ -79,31 +93,84 @@ const TrailerPreviewCard = forwardRef(function TrailerPreviewCard(
   const slotRef = useRef(null);
   const playerContainerRef = useRef(null);
   const iframeRef = useRef(null);
+  const rawPlayerRef = useRef(null);
   const ytPlayerRef = useRef(null);
+  const ytReadyRef = useRef(false);
+  const isMountedRef = useRef(true);
+  const bindTokenRef = useRef(0);
   const boundKeyRef = useRef(null);
+
   const captionOptionsRef = useRef([]);
   const desiredCaptionRef = useRef('off');
   const captionRetryTimerRef = useRef(null);
   const captionProbeTimerRef = useRef(null);
-  const playStartTimerRef = useRef(null);
+  const revealTimerRef = useRef(null);
+  const prebufferFallbackTimerRef = useRef(null);
   const hideControlsTimerRef = useRef(null);
   const closeTimerRef = useRef(null);
   const fsTimerRef = useRef(null);
+
   const manualFsExitRef = useRef(false);
   const isPlayingStateRef = useRef(false);
+  const hasPassedChromeRef = useRef(false);
+  const isPrebufferedRef = useRef(false);
+  const prebufferNotifiedRef = useRef(false);
   const modeRef = useRef('mini');
+  const isActiveRef = useRef(isActive);
+  const pausedRef = useRef(paused);
   const volumeRef = useRef(100);
+  const onPrebufferReadyRef = useRef(onPrebufferReady);
 
   useEffect(() => {
     modeRef.current = mode;
   }, [mode]);
 
   useEffect(() => {
+    isActiveRef.current = isActive;
+  }, [isActive]);
+
+  useEffect(() => {
+    pausedRef.current = paused;
+  }, [paused]);
+
+  useEffect(() => {
     volumeRef.current = volume;
   }, [volume]);
 
+  useEffect(() => {
+    onPrebufferReadyRef.current = onPrebufferReady;
+  }, [onPrebufferReady]);
+
+  // Retorna instância YT.Player SOMENTE se montada, pronta (onReady) e anexada ao DOM
+  const getReadyPlayer = useCallback(() => {
+    if (!isMountedRef.current || !ytReadyRef.current) return null;
+    const player = ytPlayerRef.current;
+    const iframeEl = iframeRef.current;
+    if (!isYouTubePlayerAttached(player, iframeEl)) return null;
+    return player;
+  }, []);
+
+  const destroyCurrentPlayer = useCallback(() => {
+    bindTokenRef.current += 1;
+    ytReadyRef.current = false;
+    ytPlayerRef.current = null;
+    boundKeyRef.current = null;
+    const inst = rawPlayerRef.current;
+    rawPlayerRef.current = null;
+    if (inst && typeof inst.destroy === 'function') {
+      try {
+        inst.destroy();
+      } catch {
+        // ignora se o iframe já foi removido
+      }
+    }
+  }, []);
+
   const sendYTCommand = useCallback((func, args = []) => {
-    const win = iframeRef.current?.contentWindow;
+    if (!isMountedRef.current) return;
+    const iframeEl = iframeRef.current;
+    if (!iframeEl || !iframeEl.isConnected) return;
+    const win = iframeEl.contentWindow;
     if (!win) return;
     try {
       win.postMessage(
@@ -115,8 +182,66 @@ const TrailerPreviewCard = forwardRef(function TrailerPreviewCard(
     }
   }, []);
 
+  const playPlayer = useCallback(() => {
+    const p = getReadyPlayer();
+    if (p) {
+      try {
+        p.playVideo?.();
+        return;
+      } catch {
+        // fallback para postMessage
+      }
+    }
+    sendYTCommand('playVideo');
+  }, [getReadyPlayer, sendYTCommand]);
+
+  const pausePlayer = useCallback(() => {
+    const p = getReadyPlayer();
+    if (p) {
+      try {
+        p.pauseVideo?.();
+        return;
+      } catch {
+        // fallback para postMessage
+      }
+    }
+    sendYTCommand('pauseVideo');
+  }, [getReadyPlayer, sendYTCommand]);
+
+  const clearRevealTimer = useCallback(() => {
+    if (revealTimerRef.current) {
+      clearTimeout(revealTimerRef.current);
+      revealTimerRef.current = null;
+    }
+  }, []);
+
+  const clearPrebufferTimer = useCallback(() => {
+    if (prebufferFallbackTimerRef.current) {
+      clearTimeout(prebufferFallbackTimerRef.current);
+      prebufferFallbackTimerRef.current = null;
+    }
+  }, []);
+
+  const notifyPrebufferDone = useCallback(() => {
+    if (prebufferNotifiedRef.current) return;
+    prebufferNotifiedRef.current = true;
+    onPrebufferReadyRef.current?.();
+  }, []);
+
+  const finishStandbyPrebuffer = useCallback(() => {
+    isPrebufferedRef.current = true;
+    hasPassedChromeRef.current = true;
+    clearPrebufferTimer();
+    clearRevealTimer();
+    if (!isActiveRef.current && modeRef.current === 'mini') {
+      pausePlayer();
+      setIsStandbyPaused(true);
+    }
+    notifyPrebufferDone();
+  }, [clearPrebufferTimer, clearRevealTimer, pausePlayer, notifyPrebufferDone]);
+
   const syncPlayerMetadata = useCallback((player, markLoadedIfEmpty = false) => {
-    if (!player) return;
+    if (!isMountedRef.current || !isYouTubePlayerAttached(player, iframeRef.current)) return;
 
     try {
       const levels = player.getAvailableQualityLevels?.();
@@ -136,7 +261,6 @@ const TrailerPreviewCard = forwardRef(function TrailerPreviewCard(
       setCaptionsLoaded(true);
     }
 
-    // Garante que a legenda real do YouTube esteja 100% alinhada com a escolha do usuário
     const targetCode = modeRef.current === 'mini' ? 'off' : desiredCaptionRef.current;
     if (targetCode === 'off') {
       if (activeCode !== 'off') {
@@ -151,27 +275,30 @@ const TrailerPreviewCard = forwardRef(function TrailerPreviewCard(
     }
   }, []);
 
-  // Resolve chave do trailer
+  // Resolve chave do trailer quando o título muda
   useEffect(() => {
     let cancelled = false;
 
     const loadVideos = async () => {
+      destroyCurrentPlayer();
+      clearRevealTimer();
+      clearPrebufferTimer();
       setIsVideoReady(false);
+      setIsStandbyPaused(false);
+      setIsPlaying(false);
+      setThumbFailed(false);
       setCurrentTime(0);
       setDuration(0);
       setCaptionLang('off');
       setCaptionOptions([]);
       setCaptionsLoaded(false);
       setAvailableQualities(null);
-      ytPlayerRef.current = null;
-      boundKeyRef.current = null;
       captionOptionsRef.current = [];
       desiredCaptionRef.current = 'off';
       isPlayingStateRef.current = false;
-      if (playStartTimerRef.current) {
-        clearTimeout(playStartTimerRef.current);
-        playStartTimerRef.current = null;
-      }
+      hasPassedChromeRef.current = false;
+      isPrebufferedRef.current = false;
+      prebufferNotifiedRef.current = false;
 
       if (preloadedVideos && preloadedVideos.length > 0) {
         const yt = preloadedVideos.filter(
@@ -206,24 +333,94 @@ const TrailerPreviewCard = forwardRef(function TrailerPreviewCard(
     loadVideos();
     return () => {
       cancelled = true;
-      if (playStartTimerRef.current) clearTimeout(playStartTimerRef.current);
+      clearRevealTimer();
+      clearPrebufferTimer();
     };
-  }, [mediaId, mediaType, initialTrailerKey, preloadedVideos]);
+  }, [
+    mediaId,
+    mediaType,
+    initialTrailerKey,
+    preloadedVideos,
+    destroyCurrentPlayer,
+    clearRevealTimer,
+    clearPrebufferTimer,
+  ]);
 
-  // Escuta eventos em tempo real do player YouTube
+  // Se um slide em standby não possui trailer, avisa imediatamente a fila de preload para avançar
   useEffect(() => {
-    if (paused || !resolvedKey) return;
+    if (shouldMountIframe && !isActive && !loadingVideos && !resolvedKey) {
+      isPrebufferedRef.current = true;
+      notifyPrebufferDone();
+    }
+  }, [shouldMountIframe, isActive, loadingVideos, resolvedKey, notifyPrebufferDone]);
 
-    const clearRevealTimer = () => {
-      if (playStartTimerRef.current) {
-        clearTimeout(playStartTimerRef.current);
-        playStartTimerRef.current = null;
+  // Gerencia ativação / standby do player persistente sem destruir o iframe
+  useEffect(() => {
+    if (!shouldMountIframe || !resolvedKey) return;
+
+    if (paused) {
+      clearRevealTimer();
+      pausePlayer();
+      return;
+    }
+
+    if (isActive) {
+      // Slide ficou ativo: retoma reprodução imediatamente do buffer aquecido
+      if (modeRef.current === 'mini') {
+        sendYTCommand('mute');
+        playPlayer();
+
+        // Se já está tocando e passou do chrome inicial do YouTube, revela rápido
+        if (isPlayingStateRef.current && hasPassedChromeRef.current) {
+          clearRevealTimer();
+          revealTimerRef.current = setTimeout(() => {
+            if (isMountedRef.current && isActiveRef.current && isPlayingStateRef.current) {
+              setIsVideoReady(true);
+            }
+          }, 180);
+        }
       }
+    } else if (modeRef.current === 'mini') {
+      // Slide ficou inativo: pausa em RAM se já pré-carregou
+      clearRevealTimer();
+      if (isPrebufferedRef.current) {
+        pausePlayer();
+      }
+    }
+  }, [
+    isActive,
+    paused,
+    shouldMountIframe,
+    resolvedKey,
+    playPlayer,
+    pausePlayer,
+    sendYTCommand,
+    clearRevealTimer,
+  ]);
+
+  // Escuta eventos em tempo real do player YouTube (postMessage)
+  useEffect(() => {
+    if (!shouldMountIframe || !resolvedKey) return;
+
+    const scheduleCleanReveal = () => {
+      clearRevealTimer();
+      // Se já aqueceu e superou o overlay inicial do YouTube, revela quase instantaneamente
+      const waitMs = hasPassedChromeRef.current ? 220 : 3200;
+      revealTimerRef.current = setTimeout(() => {
+        if (!isMountedRef.current) return;
+        if (isActiveRef.current && !pausedRef.current && isPlayingStateRef.current) {
+          hasPassedChromeRef.current = true;
+          isPrebufferedRef.current = true;
+          setIsVideoReady(true);
+          notifyPrebufferDone();
+        }
+      }, waitMs);
     };
 
     const handleMessage = (event) => {
+      if (!isMountedRef.current) return;
       if (!YT_ORIGINS.has(event.origin)) return;
-      if (iframeRef.current && event.source !== iframeRef.current.contentWindow) return;
+      if (!iframeRef.current || event.source !== iframeRef.current.contentWindow) return;
 
       let payload = event.data;
       if (typeof payload === 'string') {
@@ -245,7 +442,31 @@ const TrailerPreviewCard = forwardRef(function TrailerPreviewCard(
             : null;
 
       if (payload.event === 'infoDelivery' && info && typeof info === 'object') {
-        if (typeof info.currentTime === 'number') setCurrentTime(info.currentTime);
+        if (typeof info.currentTime === 'number' && Number.isFinite(info.currentTime)) {
+          setCurrentTime(info.currentTime);
+
+          // Se passou dos segundos de chrome inicial, libera revelação limpa imediatamente
+          if (info.currentTime >= CHROME_CLEAR_SECONDS && isPlayingStateRef.current) {
+            hasPassedChromeRef.current = true;
+            if (isActiveRef.current && !pausedRef.current && modeRef.current === 'mini') {
+              clearRevealTimer();
+              isPrebufferedRef.current = true;
+              setIsVideoReady(true);
+              notifyPrebufferDone();
+            }
+          }
+
+          // Modo standby (preload em background): aquece X segundos e pausa em RAM
+          if (
+            !isActiveRef.current &&
+            modeRef.current === 'mini' &&
+            !isPrebufferedRef.current &&
+            info.currentTime >= preloadSeconds
+          ) {
+            finishStandbyPrebuffer();
+          }
+        }
+
         if (typeof info.duration === 'number' && info.duration > 0) {
           setDuration(info.duration);
         }
@@ -255,15 +476,30 @@ const TrailerPreviewCard = forwardRef(function TrailerPreviewCard(
         isPlayingStateRef.current = true;
         setIsPlaying(true);
 
+        if (pausedRef.current) {
+          pausePlayer();
+          return;
+        }
+
         if (modeRef.current === 'expanded') {
           setIsVideoReady(true);
-        } else if (!playStartTimerRef.current) {
-          playStartTimerRef.current = setTimeout(() => {
-            if (isPlayingStateRef.current) {
-              setIsVideoReady(true);
-            }
-          }, 2100);
+          return;
         }
+
+        if (!isActiveRef.current) {
+          // Em standby: se já está pré-carregado, pausa imediatamente; senão aguarda preloadSeconds
+          if (isPrebufferedRef.current) {
+            pausePlayer();
+          } else if (!prebufferFallbackTimerRef.current) {
+            prebufferFallbackTimerRef.current = setTimeout(() => {
+              finishStandbyPrebuffer();
+            }, Math.max(3600, Math.round(preloadSeconds * 1000) + 400));
+          }
+          return;
+        }
+
+        // Slide ativo em modo mini: agenda revelação limpa (sem chrome do YouTube)
+        scheduleCleanReveal();
       } else if (state === 0) {
         isPlayingStateRef.current = false;
         setIsPlaying(false);
@@ -271,8 +507,11 @@ const TrailerPreviewCard = forwardRef(function TrailerPreviewCard(
 
         if (modeRef.current === 'mini') {
           setIsVideoReady(false);
-          sendYTCommand('seekTo', [0, true]);
-          sendYTCommand('playVideo');
+          if (isActiveRef.current && !pausedRef.current) {
+            // Reinicia já no segundo 3.5 para pular o fade-in do título do YouTube no loop
+            sendYTCommand('seekTo', [CHROME_CLEAR_SECONDS, true]);
+            playPlayer();
+          }
         }
       } else if (state === 2) {
         isPlayingStateRef.current = false;
@@ -290,14 +529,26 @@ const TrailerPreviewCard = forwardRef(function TrailerPreviewCard(
     return () => {
       window.removeEventListener('message', handleMessage);
       clearRevealTimer();
+      clearPrebufferTimer();
     };
-  }, [paused, resolvedKey, sendYTCommand]);
+  }, [
+    shouldMountIframe,
+    resolvedKey,
+    preloadSeconds,
+    sendYTCommand,
+    playPlayer,
+    pausePlayer,
+    clearRevealTimer,
+    clearPrebufferTimer,
+    finishStandbyPrebuffer,
+    notifyPrebufferDone,
+  ]);
 
   const bumpControlsActivity = useCallback(() => {
     setControlsVisible(true);
     if (hideControlsTimerRef.current) clearTimeout(hideControlsTimerRef.current);
     hideControlsTimerRef.current = setTimeout(() => {
-      if (modeRef.current === 'expanded' && isPlayingStateRef.current) {
+      if (isMountedRef.current && modeRef.current === 'expanded' && isPlayingStateRef.current) {
         setControlsVisible(false);
       }
     }, 2600);
@@ -318,28 +569,44 @@ const TrailerPreviewCard = forwardRef(function TrailerPreviewCard(
       setIsMuted(false);
       sendYTCommand('unMute');
       sendYTCommand('setVolume', [volumeRef.current]);
-      sendYTCommand('playVideo');
-      if (ytPlayerRef.current) {
-        ytPlayerRef.current.loadModule?.('captions');
-        setTimeout(() => syncPlayerMetadata(ytPlayerRef.current, true), 220);
+      playPlayer();
+      const player = getReadyPlayer();
+      if (player) {
+        try {
+          player.loadModule?.('captions');
+        } catch {
+          // ignora
+        }
+        setTimeout(() => {
+          const p = getReadyPlayer();
+          if (p) syncPlayerMetadata(p, true);
+        }, 220);
       }
     }
 
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
+        if (!isMountedRef.current) return;
         setMode('expanded');
         bumpControlsActivity();
       });
     });
 
-    // Entra automaticamente em tela cheia nativa assim que a expansão suave termina
     if (fsTimerRef.current) clearTimeout(fsTimerRef.current);
     fsTimerRef.current = setTimeout(() => {
-      if (modeRef.current === 'expanded' && !document.fullscreenElement) {
+      if (isMountedRef.current && modeRef.current === 'expanded' && !document.fullscreenElement) {
         playerContainerRef.current?.requestFullscreen?.().catch(() => {});
       }
     }, 450);
-  }, [resolvedKey, sendYTCommand, syncPlayerMetadata, onExpandChange, bumpControlsActivity]);
+  }, [
+    resolvedKey,
+    sendYTCommand,
+    playPlayer,
+    getReadyPlayer,
+    syncPlayerMetadata,
+    onExpandChange,
+    bumpControlsActivity,
+  ]);
 
   // Recolhe o MESMO iframe suavemente de volta para o cantinho sem recarregar
   const closeFullscreen = useCallback(() => {
@@ -362,20 +629,26 @@ const TrailerPreviewCard = forwardRef(function TrailerPreviewCard(
     if (resolvedKey) {
       setIsMuted(true);
       sendYTCommand('mute');
-      sendYTCommand('playVideo');
-      if (ytPlayerRef.current) {
-        applyCaptionSelection(ytPlayerRef.current, 'off', captionOptionsRef.current);
+      if (isActiveRef.current && !pausedRef.current) {
+        playPlayer();
+      } else {
+        pausePlayer();
+      }
+      const player = getReadyPlayer();
+      if (player) {
+        applyCaptionSelection(player, 'off', captionOptionsRef.current);
       }
     }
 
     if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
     closeTimerRef.current = setTimeout(() => {
+      if (!isMountedRef.current) return;
       setMode('mini');
       document.body.style.overflow = '';
       onExpandChange?.(false);
       notifyPlayerOverlay(false);
     }, 420);
-  }, [anchorRect, resolvedKey, sendYTCommand, onExpandChange]);
+  }, [anchorRect, resolvedKey, sendYTCommand, playPlayer, pausePlayer, getReadyPlayer, onExpandChange]);
 
   useImperativeHandle(
     ref,
@@ -413,8 +686,8 @@ const TrailerPreviewCard = forwardRef(function TrailerPreviewCard(
         closeFullscreen();
       } else if (e.key === ' ' || e.key.toLowerCase() === 'k') {
         e.preventDefault();
-        if (isPlayingStateRef.current) sendYTCommand('pauseVideo');
-        else sendYTCommand('playVideo');
+        if (isPlayingStateRef.current) pausePlayer();
+        else playPlayer();
         bumpControlsActivity();
       } else if (e.key === 'ArrowRight') {
         e.preventDefault();
@@ -439,12 +712,12 @@ const TrailerPreviewCard = forwardRef(function TrailerPreviewCard(
 
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [mode, closeFullscreen, sendYTCommand, bumpControlsActivity, currentTime, isMuted]);
+  }, [mode, closeFullscreen, sendYTCommand, playPlayer, pausePlayer, bumpControlsActivity, currentTime, isMuted]);
 
   useEffect(() => {
     if (mode !== 'expanded') return;
     const poll = setInterval(() => {
-      const p = ytPlayerRef.current;
+      const p = getReadyPlayer();
       if (!p) return;
       try {
         const t = p.getCurrentTime?.();
@@ -456,27 +729,35 @@ const TrailerPreviewCard = forwardRef(function TrailerPreviewCard(
       }
     }, 250);
     return () => clearInterval(poll);
-  }, [mode]);
+  }, [mode, getReadyPlayer]);
 
+  // Cleanup rigoroso na desmontagem — evita qualquer erro de player desconectado do DOM
   useEffect(() => {
+    isMountedRef.current = true;
     return () => {
+      isMountedRef.current = false;
       if (hideControlsTimerRef.current) clearTimeout(hideControlsTimerRef.current);
       if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
       if (fsTimerRef.current) clearTimeout(fsTimerRef.current);
       if (captionRetryTimerRef.current) clearTimeout(captionRetryTimerRef.current);
       if (captionProbeTimerRef.current) clearTimeout(captionProbeTimerRef.current);
-      ytPlayerRef.current = null;
+      clearRevealTimer();
+      clearPrebufferTimer();
+      destroyCurrentPlayer();
       if (modeRef.current !== 'mini') {
         document.body.style.overflow = '';
         notifyPlayerOverlay(false);
       }
     };
-  }, []);
+  }, [clearRevealTimer, clearPrebufferTimer, destroyCurrentPlayer]);
 
   const handleIframeLoad = () => {
+    if (!isMountedRef.current) return;
     const iframeEl = iframeRef.current;
-    const win = iframeEl?.contentWindow;
+    if (!iframeEl || !iframeEl.isConnected) return;
+    const win = iframeEl.contentWindow;
     if (!win) return;
+
     try {
       win.postMessage(
         JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }),
@@ -487,37 +768,89 @@ const TrailerPreviewCard = forwardRef(function TrailerPreviewCard(
     }
 
     const currentKey = resolvedKey;
+    const token = ++bindTokenRef.current;
+
     loadYouTubeIframeApi().then((YT) => {
-      if (!YT || !iframeRef.current || boundKeyRef.current === currentKey) return;
+      if (
+        !isMountedRef.current ||
+        token !== bindTokenRef.current ||
+        !YT ||
+        !iframeRef.current ||
+        !iframeRef.current.isConnected ||
+        boundKeyRef.current === currentKey
+      ) {
+        return;
+      }
+
       boundKeyRef.current = currentKey;
       try {
         const player = new YT.Player(iframeRef.current, {
           events: {
             onReady: (e) => {
+              if (
+                !isMountedRef.current ||
+                token !== bindTokenRef.current ||
+                !isYouTubePlayerAttached(e.target, iframeRef.current)
+              ) {
+                return;
+              }
+              ytReadyRef.current = true;
               ytPlayerRef.current = e.target;
+
+              // Garante estado inicial coerente com isActive / paused
               try {
-                e.target.loadModule?.('captions');
+                e.target.mute?.();
+                if (pausedRef.current || (!isActiveRef.current && isPrebufferedRef.current)) {
+                  e.target.pauseVideo?.();
+                } else {
+                  e.target.playVideo?.();
+                }
               } catch {
                 // ignora
               }
+
+              // Carrega módulo de legendas apenas se o player continuar anexado
               if (captionProbeTimerRef.current) clearTimeout(captionProbeTimerRef.current);
               captionProbeTimerRef.current = setTimeout(() => {
-                syncPlayerMetadata(e.target, true);
-              }, 900);
+                const readyP = getReadyPlayer();
+                if (!readyP) return;
+                try {
+                  readyP.loadModule?.('captions');
+                } catch {
+                  // ignora
+                }
+                syncPlayerMetadata(readyP, true);
+              }, 1100);
             },
             onApiChange: (e) => {
+              if (
+                !isMountedRef.current ||
+                token !== bindTokenRef.current ||
+                !ytReadyRef.current ||
+                !isYouTubePlayerAttached(e.target, iframeRef.current)
+              ) {
+                return;
+              }
               ytPlayerRef.current = e.target;
               syncPlayerMetadata(e.target, false);
             },
             onStateChange: (e) => {
+              if (
+                !isMountedRef.current ||
+                token !== bindTokenRef.current ||
+                !ytReadyRef.current ||
+                !isYouTubePlayerAttached(e.target, iframeRef.current)
+              ) {
+                return;
+              }
               ytPlayerRef.current = e.target;
-              if (e.data === 1) {
+              if (e.data === 1 && modeRef.current === 'expanded') {
                 syncPlayerMetadata(e.target, false);
               }
             },
           },
         });
-        ytPlayerRef.current = player;
+        rawPlayerRef.current = player;
       } catch {
         // fallback para postMessage já ativo
       }
@@ -526,11 +859,11 @@ const TrailerPreviewCard = forwardRef(function TrailerPreviewCard(
 
   const handleTogglePlay = () => {
     if (isPlaying) {
-      sendYTCommand('pauseVideo');
+      pausePlayer();
       setIsPlaying(false);
       setControlsVisible(true);
     } else {
-      sendYTCommand('playVideo');
+      playPlayer();
       setIsPlaying(true);
       bumpControlsActivity();
     }
@@ -576,20 +909,21 @@ const TrailerPreviewCard = forwardRef(function TrailerPreviewCard(
     desiredCaptionRef.current = langCode;
     setCaptionLang(langCode);
 
-    const player = ytPlayerRef.current;
+    const player = getReadyPlayer();
     if (player) {
       applyCaptionSelection(player, langCode, captionOptionsRef.current);
       if (captionRetryTimerRef.current) clearTimeout(captionRetryTimerRef.current);
       if (langCode !== 'off') {
         captionRetryTimerRef.current = setTimeout(() => {
-          if (desiredCaptionRef.current === langCode && ytPlayerRef.current) {
-            const { options } = extractCaptionOptions(ytPlayerRef.current);
+          const readyP = getReadyPlayer();
+          if (desiredCaptionRef.current === langCode && readyP) {
+            const { options } = extractCaptionOptions(readyP);
             if (options.length > 0) {
               captionOptionsRef.current = options;
               setCaptionOptions(options);
               setCaptionsLoaded(true);
             }
-            applyCaptionSelection(ytPlayerRef.current, langCode, captionOptionsRef.current);
+            applyCaptionSelection(readyP, langCode, captionOptionsRef.current);
           }
         }, 320);
       }
@@ -610,10 +944,11 @@ const TrailerPreviewCard = forwardRef(function TrailerPreviewCard(
 
   const handleQualityChange = (qVal) => {
     setQuality(qVal);
-    if (ytPlayerRef.current) {
+    const player = getReadyPlayer();
+    if (player) {
       try {
-        ytPlayerRef.current.setPlaybackQuality?.(qVal);
-        ytPlayerRef.current.setPlaybackQualityRange?.(qVal, qVal);
+        player.setPlaybackQuality?.(qVal);
+        player.setPlaybackQualityRange?.(qVal, qVal);
       } catch {
         // ignora
       }
@@ -643,8 +978,22 @@ const TrailerPreviewCard = forwardRef(function TrailerPreviewCard(
 
   const isExpanded = mode === 'expanded';
   const isOverlay = mode !== 'mini';
-  const showIframe = !paused && resolvedKey && isValidYouTubeKey(resolvedKey);
-  const thumbUrl = getBackdropUrl(backdropPath, 'w780');
+  const showLiveVideo = isExpanded || (isActive && !paused && isVideoReady);
+  const showIframe =
+    shouldMountIframe && resolvedKey && isValidYouTubeKey(resolvedKey);
+
+  // Capa distinta do fundo da Hero:
+  // 1) Cena alternativa do TMDB (previewImagePath)
+  // 2) Thumbnail 16:9 limpa do próprio trailer no YouTube (mqdefault, sem barras pretas)
+  // 3) Somente se !avoidSameAsHero, fallback para backdropPath
+  const resolvedThumbUrl = previewImagePath
+    ? getBackdropUrl(previewImagePath, 'w780')
+    : resolvedKey && isValidYouTubeKey(resolvedKey)
+      ? `https://i.ytimg.com/vi/${resolvedKey}/mqdefault.jpg`
+      : !avoidSameAsHero && backdropPath
+        ? getBackdropUrl(backdropPath, 'w780')
+        : null;
+
   const originParam =
     typeof window !== 'undefined' ? encodeURIComponent(window.location.origin) : '';
 
@@ -712,7 +1061,7 @@ const TrailerPreviewCard = forwardRef(function TrailerPreviewCard(
         }
         onClick={!isOverlay ? openFullscreen : undefined}
         role={!isOverlay ? 'button' : 'dialog'}
-        tabIndex={!isOverlay ? 0 : undefined}
+        tabIndex={!isOverlay && isActive ? 0 : -1}
         onKeyDown={
           !isOverlay
             ? (e) => {
@@ -724,26 +1073,39 @@ const TrailerPreviewCard = forwardRef(function TrailerPreviewCard(
             : undefined
         }
         aria-label={`Assistir trailer de ${title}`}
-        className={`overflow-hidden bg-[#09090B] ${
+        className={`overflow-hidden bg-[#0E0E13] ${
           !isOverlay
-            ? 'group absolute inset-0 rounded-2xl border border-white/20 hover:border-white/40 shadow-[0_22px_55px_rgba(0,0,0,0.8)] cursor-pointer transition-transform duration-300 hover:scale-[1.03]'
+            ? 'group absolute inset-0 isolate rounded-2xl [clip-path:inset(0_round_16px)] border border-white/20 hover:border-white/40 shadow-[0_22px_55px_rgba(0,0,0,0.8)] cursor-pointer transition-transform duration-300 hover:scale-[1.03]'
             : 'shadow-2xl'
         }`}
       >
-        {thumbUrl && (
+        {/* Capa editorial distinta da Hero enquanto o vídeo ainda aquece */}
+        {resolvedThumbUrl && !thumbFailed ? (
           <img
-            src={thumbUrl}
-            alt={`Trailer de ${title}`}
-            className={`absolute inset-0 w-full h-full object-cover transition-transform duration-500 ${
-              !isOverlay ? 'opacity-90 group-hover:scale-105' : 'opacity-40'
+            src={resolvedThumbUrl}
+            alt={`Prévia de ${title}`}
+            onError={() => setThumbFailed(true)}
+            className={`absolute inset-0 w-full h-full object-cover transition-all duration-500 ${
+              !isOverlay
+                ? showLiveVideo
+                  ? 'opacity-0 scale-105'
+                  : 'opacity-95 group-hover:scale-105'
+                : 'opacity-30'
             }`}
           />
+        ) : (
+          <div className="absolute inset-0 bg-gradient-to-br from-[#191922] via-[#111117] to-[#09090B]" />
         )}
 
+        {/* Iframe YouTube persistente com crop generoso no modo mini (100% sem chrome YT) */}
         {showIframe && (
           <div
-            className={`absolute inset-0 overflow-hidden pointer-events-none transition-opacity duration-500 ${
-              isVideoReady || isExpanded ? 'opacity-100' : 'opacity-0'
+            className={`absolute inset-0 overflow-hidden pointer-events-none transition-opacity duration-700 ${
+              showLiveVideo
+                ? 'opacity-100 visible'
+                : !isActive && isStandbyPaused
+                  ? 'opacity-0 invisible'
+                  : 'opacity-0'
             }`}
           >
             <iframe
@@ -758,7 +1120,7 @@ const TrailerPreviewCard = forwardRef(function TrailerPreviewCard(
               allow="autoplay; encrypted-media"
               onLoad={handleIframeLoad}
               className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none transition-all duration-500 ${
-                isExpanded ? 'w-full h-full' : 'w-[138%] h-[138%]'
+                isExpanded ? 'w-full h-full' : 'w-[186%] h-[186%]'
               }`}
             />
           </div>
@@ -766,9 +1128,12 @@ const TrailerPreviewCard = forwardRef(function TrailerPreviewCard(
 
         {!isOverlay && (
           <>
-            <div className="absolute inset-0 bg-gradient-to-br from-black/25 via-transparent to-black/35 pointer-events-none" />
-            <span className="absolute top-3.5 left-3.5 w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white text-[#09090B] flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform z-10">
+            <div className="absolute inset-0 bg-gradient-to-br from-black/30 via-transparent to-black/45 pointer-events-none" />
+            <span className="absolute top-3 left-3 w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white text-[#09090B] flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform z-10">
               <Play className="w-4 h-4 fill-current ml-0.5" />
+            </span>
+            <span className="absolute bottom-2.5 right-2.5 px-2 py-0.5 rounded-md bg-black/60 backdrop-blur-md border border-white/15 text-[10px] font-semibold uppercase tracking-wider text-white/85 pointer-events-none z-10">
+              Trailer
             </span>
           </>
         )}

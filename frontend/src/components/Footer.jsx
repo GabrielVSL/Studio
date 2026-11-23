@@ -23,11 +23,8 @@ export default function Footer() {
             <Link to="/" className="hover:text-white transition-colors">
               Início
             </Link>
-            <Link to="/explorar?tipo=movie" className="hover:text-white transition-colors">
-              Filmes
-            </Link>
-            <Link to="/explorar?tipo=tv" className="hover:text-white transition-colors">
-              Séries
+            <Link to="/explorar" className="hover:text-white transition-colors">
+              Explorar
             </Link>
             <Link to="/minha-lista" className="hover:text-white transition-colors">
               Minha Lista

@@ -5,6 +5,7 @@ import Header from './components/Header';
 import Footer from './components/Footer';
 import Home from './components/Home';
 import MovieDetails from './components/MovieDetails';
+import PersonDetails from './components/PersonDetails';
 import Explorer from './components/Explorer';
 import MyList from './components/MyList';
 import NotFound from './components/NotFound';
@@ -43,6 +44,7 @@ function App() {
         <Router>
           <div className="min-h-screen flex flex-col bg-[#09090B] text-white">
             <Header
+              searchOpen={searchOpen}
               onOpenSurprise={() => setSurpriseOpen(true)}
               onOpenSearch={() => setSearchOpen(true)}
             />
@@ -54,9 +56,11 @@ function App() {
                 <Route path="/explorer" element={<Explorer />} />
                 <Route path="/minha-lista" element={<MyList />} />
 
-                {/* Rotas unificadas Filmes + Séries */}
+                {/* Rotas unificadas Filmes + Séries + Artistas */}
                 <Route path="/filme/:id" element={<MovieDetails mediaType="movie" />} />
                 <Route path="/serie/:id" element={<MovieDetails mediaType="tv" />} />
+                <Route path="/artista/:id" element={<PersonDetails />} />
+                <Route path="/pessoa/:id" element={<PersonDetails />} />
 
                 {/* Rotas legadas preservadas para compatibilidade */}
                 <Route path="/series/:id" element={<MovieDetails mediaType="tv" />} />
